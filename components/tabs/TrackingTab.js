@@ -112,30 +112,35 @@ export default function TrackingTab({ profile }) {
 
   useEffect(() => { fetchAll(); fetchSuppCategories() }, [])
 
-  // サプリカテゴリをSupabaseから取得
+  // サプリカテゴリ（固定リスト + Supabaseから動的取得）
   async function fetchSuppCategories() {
-    const { data } = await supabase
-      .from('supplements_master')
-      .select('category, category_icon')
-      .eq('is_active', true)
-    if (data) {
-      const cats = [...new Map(data.map(r => [r.category, { label: r.category, icon: r.category_icon }])).values()]
-      setSuppCategories(cats)
-    }
+    // 固定カテゴリをまず設定（即座に表示）
+    setSuppCategories([
+      { label: 'プロテイン', icon: '🥛' },
+      { label: 'BCAA/EAA', icon: '⚡' },
+      { label: 'クレアチン', icon: '💪' },
+      { label: 'ビタミン', icon: '🌟' },
+      { label: 'ミネラル', icon: '⚗️' },
+      { label: 'オメガ3/魚油', icon: '🐟' },
+      { label: 'プレワークアウト', icon: '🔥' },
+      { label: '美容・その他', icon: '✨' },
+    ])
   }
 
-  // サプリ検索（テキスト or カテゴリ）
+  // サプリ検索（Open Food Facts API + Supabaseキャッシュ）
   async function searchSupplements(text, category) {
     setSearchingSupp(true)
-    let query = supabase.from('supplements_master').select('*').eq('is_active', true)
-    if (text) {
-      query = query.or(`name.ilike.%${text}%,brand.ilike.%${text}%`)
-    } else if (category) {
-      query = query.eq('category', category)
+    try {
+      const params = new URLSearchParams()
+      if (text) params.set('q', text)
+      if (category) params.set('category', category)
+      const res = await fetch(`/api/supplement-search?${params}`)
+      const data = await res.json()
+      setSuppSearchResults(data.products || [])
+    } catch (e) {
+      console.error('supplement search error:', e)
+      setSuppSearchResults([])
     }
-    query = query.order('brand').limit(20)
-    const { data } = await query
-    setSuppSearchResults(data || [])
     setSearchingSupp(false)
   }
 
@@ -731,10 +736,12 @@ export default function TrackingTab({ profile }) {
                 const v = e.target.value
                 setSuppSearchText(v)
                 setSuppCategory('')
-                if (v.length >= 2) searchSupplements(v, '')
-                else if (v.length === 0) setSuppSearchResults([])
+                if (v.length >= 2) {
+                  const timer = setTimeout(() => searchSupplements(v, ''), 400) // デバウンス400ms
+                  return () => clearTimeout(timer)
+                } else if (v.length === 0) setSuppSearchResults([])
               }}
-              placeholder="例: ザバス、ON、DHC、ホエイ..."
+              placeholder="例: ザバス、Optimum Nutrition、DHC、ホエイ..."
               style={{ ...s.input, marginBottom: 10 }}
             />
 
