@@ -159,7 +159,7 @@ export default function PhotoTab({ profile, onRecord }) {
       })
       const data = await res.json()
       if (data.error) throw new Error(data.error)
-      await supabase.from('meal_records').insert({
+      const { data: inserted } = await supabase.from('meal_records').insert({
         user_id: profile.id,
         meal_name: data.meal_name,
         meal_type: mealId,
@@ -173,8 +173,9 @@ export default function PhotoTab({ profile, onRecord }) {
         note: meal.note,
         symptoms: meal.symptoms,
         recorded_at: new Date().toISOString(),
-      })
-      onRecord(data)
+      }).select().single()
+      // idつきでdailyIntakeに追加（履歴タブで削除できるようにするため）
+      onRecord(inserted || data)
       setResults(prev => ({ ...prev, [mealId]: data }))
     } catch(e) {
       alert('分析に失敗しました。もう一度お試しください。')

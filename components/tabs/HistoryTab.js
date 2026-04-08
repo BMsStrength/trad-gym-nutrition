@@ -5,7 +5,7 @@ import { DailySummaryCard } from '../MainApp'
 const MEAL_ICONS = { breakfast:'🌅', lunch:'☀️', dinner:'🌙' }
 const MEAL_LABELS = { breakfast:'朝食', lunch:'昼食', dinner:'夕食' }
 
-export default function HistoryTab({ profile, dailyIntake = [] }) {
+export default function HistoryTab({ profile, dailyIntake = [], onDelete }) {
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10))
@@ -14,6 +14,11 @@ export default function HistoryTab({ profile, dailyIntake = [] }) {
   const isToday = selectedDate === new Date().toISOString().slice(0, 10)
 
   useEffect(() => { fetchRecords() }, [selectedDate])
+
+  // 食事が追加・削除されたとき今日の表示を自動更新
+  useEffect(() => {
+    if (isToday) fetchRecords()
+  }, [dailyIntake.length])
 
   async function fetchRecords() {
     setLoading(true)
@@ -36,9 +41,11 @@ export default function HistoryTab({ profile, dailyIntake = [] }) {
     setRecords(prev => prev.filter(r => r.id !== id))
     setConfirmId(null)
     setDeletingId(null)
+    // 今日の記録ならdailyIntakeからも除去
+    if (onDelete) onDelete(id)
   }
 
-  const displayRecords = isToday && dailyIntake.length > 0 ? dailyIntake : records
+  const displayRecords = records
   const intakeForSummary = displayRecords.map(r => ({
     total_cal: r.total_cal, protein: r.protein, fat: r.fat,
     carbs: r.carbs, vitamins: r.vitamins, minerals: r.minerals,

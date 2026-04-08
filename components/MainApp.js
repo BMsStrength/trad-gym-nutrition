@@ -12,7 +12,6 @@ const TABS = [
   { id:'profile', icon:'👤', label:'プロフィール' },
 ]
 
-// 1日のビタミン・ミネラル目標量（成人平均）
 const DAILY_TARGETS = {
   vitamins: {
     'A':   { target: 800,  unit: 'μgRE' },
@@ -50,7 +49,7 @@ function sumNutrients(dailyIntake) {
   return { vitamins, minerals }
 }
 
-function NutrientBar({ label, consumed, target, unit, color }) {
+function NutrientBar({ label, consumed, target, unit }) {
   const pct = Math.min(100, Math.round(consumed / target * 100))
   const barColor = pct >= 80 ? '#3B6D11' : pct >= 50 ? '#378ADD' : '#BA7517'
   const display = consumed < 10 ? consumed.toFixed(1) : Math.round(consumed)
@@ -81,7 +80,6 @@ function DailySummaryCard({ profile, dailyIntake, defaultOpen = false }) {
   const consumedC = dailyIntake.reduce((s, r) => s + (r.carbs || 0), 0)
   const calPct = Math.min(100, Math.round(consumed / profile.targetCal * 100))
   const { vitamins, minerals } = sumNutrients(dailyIntake)
-
   const calColor = calPct > 110 ? '#E24B4A' : calPct >= 80 ? '#3B6D11' : '#BA7517'
 
   return (
@@ -90,8 +88,6 @@ function DailySummaryCard({ profile, dailyIntake, defaultOpen = false }) {
         <span style={{ fontSize:13, fontWeight:600 }}>今日の栄養バランス</span>
         <span style={{ fontSize:12, color:'#888' }}>{open ? '▲ 閉じる' : '▼ 詳細を見る'}</span>
       </div>
-
-      {/* カロリーバー（常に表示） */}
       <div style={{ marginBottom: open ? 12 : 0 }}>
         <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:3 }}>
           <span style={{ color:'#555' }}>カロリー</span>
@@ -102,9 +98,7 @@ function DailySummaryCard({ profile, dailyIntake, defaultOpen = false }) {
         </div>
         <div style={{ fontSize:10, color:'#aaa', marginTop:1, textAlign:'right' }}>{calPct}%</div>
       </div>
-
       {open && <>
-        {/* セクション切替 */}
         <div style={{ display:'flex', gap:6, marginBottom:12, marginTop:4 }}>
           {[['pfc','PFC'],['vitamins','ビタミン'],['minerals','ミネラル']].map(([id, label]) => (
             <button key={id} onClick={() => setSection(id)} style={{
@@ -114,17 +108,14 @@ function DailySummaryCard({ profile, dailyIntake, defaultOpen = false }) {
             }}>{label}</button>
           ))}
         </div>
-
         {section === 'pfc' && <>
           <NutrientBar label="たんぱく質" consumed={consumedP} target={profile.pfcP} unit="g" />
           <NutrientBar label="脂質"       consumed={consumedF} target={profile.pfcF} unit="g" />
           <NutrientBar label="炭水化物"   consumed={consumedC} target={profile.pfcC} unit="g" />
         </>}
-
         {section === 'vitamins' && Object.entries(DAILY_TARGETS.vitamins).map(([name, t]) => (
           <NutrientBar key={name} label={'ビタミン ' + name} consumed={vitamins[name] || 0} target={t.target} unit={t.unit} />
         ))}
-
         {section === 'minerals' && Object.entries(DAILY_TARGETS.minerals).map(([name, t]) => (
           <NutrientBar key={name} label={name} consumed={minerals[name] || 0} target={t.target} unit={t.unit} />
         ))}
@@ -139,8 +130,14 @@ export default function MainApp({ session, profile, onProfileUpdate }) {
   const [tab, setTab] = useState('photo')
   const [dailyIntake, setDailyIntake] = useState([])
 
+  // PhotoTabから記録追加：Supabaseに保存後、idつきで返ってくる想定
   function addRecord(record) {
     setDailyIntake(prev => [...prev, record])
+  }
+
+  // HistoryTabから削除されたときにdailyIntakeからも除去
+  function removeRecord(id) {
+    setDailyIntake(prev => prev.filter(r => r.id !== id))
   }
 
   return (
@@ -153,13 +150,11 @@ export default function MainApp({ session, profile, onProfileUpdate }) {
 
       {/* コンテンツ */}
       <div style={{ flex:1, padding:16, paddingBottom:80 }}>
-        {/* 今日の栄養サマリー（ホーム画面上部に常時表示） */}
         {tab === 'photo' && (
           <DailySummaryCard profile={profile} dailyIntake={dailyIntake} defaultOpen={false} />
         )}
-
         {tab === 'photo'   && <PhotoTab profile={profile} onRecord={addRecord} />}
-        {tab === 'history' && <HistoryTab profile={profile} dailyIntake={dailyIntake} />}
+        {tab === 'history' && <HistoryTab profile={profile} dailyIntake={dailyIntake} onDelete={removeRecord} />}
         {tab === 'advice'  && <AdviceTab profile={profile} dailyIntake={dailyIntake} />}
         {tab === 'profile' && <ProfileTab session={session} profile={profile} onProfileUpdate={onProfileUpdate} />}
       </div>
