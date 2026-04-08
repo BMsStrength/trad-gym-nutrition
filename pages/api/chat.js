@@ -11,7 +11,7 @@ const GOAL_LABELS = {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  const { message, profile, dailyIntake, history, trends, timingTrends } = req.body
+  const { message, profile, dailyIntake, history, trends, timingTrends, suppNutrients } = req.body
   const bmi = Math.round(profile.weight / ((profile.height / 100) ** 2) * 10) / 10
   const consumed = (dailyIntake || []).reduce((s, r) => s + r.total_cal, 0)
   const goals = profile.goals || [profile.goal]
@@ -35,6 +35,7 @@ export default async function handler(req, res) {
 - 登録症状：${profileSymptoms}
 - 今日の摂取カロリー：${consumed} kcal
 - 今日の食事：${(dailyIntake||[]).map(r=>r.meal_name+'('+r.total_cal+'kcal)').join('、') || 'まだ記録なし'}
+${suppNutrients ? `- 今日のサプリ補給：${suppNutrients}` : '- サプリ記録：なし'}
 
 ${trends ? `━━━━━━━━━━━━━━━━━━━━━━━━━━━
 【過去の食事傾向データ（学習済み）】

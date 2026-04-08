@@ -15,10 +15,7 @@ const EXERCISE_PRESETS = [
   { name: 'その他', cal_per_min: 4, icon: '🏋️' },
 ]
 
-const SUPP_PRESETS = [
-  'プロテイン', 'BCAA', 'EAA', 'クレアチン', 'マルチビタミン',
-  'ビタミンD', '鉄', 'マグネシウム', '亜鉛', 'オメガ3', 'CoQ10', 'その他'
-]
+// サプリDBはSupabase supplements_masterテーブルから取得
 
 const WATER_QUICK = [150, 200, 350, 500]
 
@@ -97,18 +94,50 @@ export default function TrackingTab({ profile }) {
   const [savingEx, setSavingEx] = useState(false)
 
   // サプリ
-  const [suppName, setSuppName] = useState('')
-  const [suppAmount, setSuppAmount] = useState('')
-  const [suppTiming, setSuppTiming] = useState('朝')
+  const [suppCategory, setSuppCategory] = useState('')
+  const [suppProduct, setSuppProduct] = useState(null)
+  const [suppServings, setSuppServings] = useState(1)
+  const [suppTiming, setSuppTiming] = useState('運動後')
   const [suppRecords, setSuppRecords] = useState([])
   const [savingSupp, setSavingSupp] = useState(false)
+  const [suppSearchText, setSuppSearchText] = useState('')
+  const [suppSearchResults, setSuppSearchResults] = useState([])
+  const [suppCategories, setSuppCategories] = useState([])
+  const [searchingSupp, setSearchingSupp] = useState(false)
 
   // グラフ関連state
   const [graphPeriod, setGraphPeriod] = useState('week') // 'week' | 'month'
   const [mealTrends, setMealTrends] = useState([]) // 日別食事集計
   const [mealHourCounts, setMealHourCounts] = useState(Array(24).fill(0)) // 食事時刻分布
 
-  useEffect(() => { fetchAll() }, [])
+  useEffect(() => { fetchAll(); fetchSuppCategories() }, [])
+
+  // サプリカテゴリをSupabaseから取得
+  async function fetchSuppCategories() {
+    const { data } = await supabase
+      .from('supplements_master')
+      .select('category, category_icon')
+      .eq('is_active', true)
+    if (data) {
+      const cats = [...new Map(data.map(r => [r.category, { label: r.category, icon: r.category_icon }])).values()]
+      setSuppCategories(cats)
+    }
+  }
+
+  // サプリ検索（テキスト or カテゴリ）
+  async function searchSupplements(text, category) {
+    setSearchingSupp(true)
+    let query = supabase.from('supplements_master').select('*').eq('is_active', true)
+    if (text) {
+      query = query.or(`name.ilike.%${text}%,brand.ilike.%${text}%`)
+    } else if (category) {
+      query = query.eq('category', category)
+    }
+    query = query.order('brand').limit(20)
+    const { data } = await query
+    setSuppSearchResults(data || [])
+    setSearchingSupp(false)
+  }
 
   async function fetchAll() {
     const from30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
@@ -201,18 +230,35 @@ export default function TrackingTab({ profile }) {
     setSavingEx(false)
   }
 
-  // サプリ記録保存
+  // サプリ記録保存（Supabaseマスターデータ対応）
   async function saveSupplement() {
-    if (!suppName) return
+    if (!suppProduct) return
     setSavingSupp(true)
+    const s = suppServings
+    const nutrients = {
+      calories: Math.round((suppProduct.calories_per_serving || 0) * s * 10) / 10,
+      protein:  Math.round((suppProduct.protein_per_serving  || 0) * s * 10) / 10,
+      fat:      Math.round((suppProduct.fat_per_serving      || 0) * s * 10) / 10,
+      carbs:    Math.round((suppProduct.carbs_per_serving    || 0) * s * 10) / 10,
+      vitamins: Object.fromEntries(
+        Object.entries(suppProduct.vitamins_per_serving || {}).map(([k,v]) => [k, Math.round(v*s*100)/100])
+      ),
+      minerals: Object.fromEntries(
+        Object.entries(suppProduct.minerals_per_serving || {}).map(([k,v]) => [k, Math.round(v*s*100)/100])
+      ),
+      special: suppProduct.special_per_serving || null,
+    }
     await supabase.from('supplement_records').insert({
       user_id: profile.id,
-      supp_name: suppName,
-      amount: suppAmount,
+      supp_name: `${suppProduct.brand} ${suppProduct.name}`,
+      amount: `×${s} (${suppProduct.serving_unit})`,
       timing: suppTiming,
+      product_id: suppProduct.id,
+      servings: s,
+      nutrients,
       recorded_at: new Date().toISOString(),
     })
-    setSuppName(''); setSuppAmount('')
+    setSuppProduct(null); setSuppCategory(''); setSuppSearchText(''); setSuppSearchResults([])
     fetchAll()
     setSavingSupp(false)
   }
@@ -581,6 +627,18 @@ export default function TrackingTab({ profile }) {
             ))}
           </div>
 
+          {/* 水分と食事の相互評価 */}
+          <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: '10px 12px', marginBottom: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#1E40AF', marginBottom: 4 }}>💡 水分と栄養吸収の関係</div>
+            <div style={{ fontSize: 11, color: '#1D4ED8', lineHeight: 1.7 }}>
+              {totalWaterMl < 1000
+                ? '⚠️ 水分が不足しています。水分が足りないと栄養素の吸収・代謝・体温調節が低下します。プロテインやビタミン・ミネラルの効果も半減します。'
+                : totalWaterMl < 1500
+                ? '📊 もう少しです。水分は栄養素の運搬・消化・代謝に必須。プロテイン摂取後は特に200ml以上飲みましょう。'
+                : '✅ 水分摂取が良好です。栄養素の吸収・代謝が最適な状態で働きやすくなっています。'}
+            </div>
+          </div>
+
           {/* 今日のログ */}
           {waterRecords.length > 0 && (
             <div>
@@ -658,56 +716,207 @@ export default function TrackingTab({ profile }) {
 
       {/* ━━━━━ サプリメント ━━━━━ */}
       {activeSection === 'supplement' && (
-        <div style={s.card}>
-          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>💊 サプリメントを記録</div>
-          <div style={{ fontSize: 12, color: '#888', marginBottom: 12, lineHeight: 1.6 }}>
-            食事と合わせた総合的な栄養管理のために、サプリの摂取を記録しましょう。
+        <>
+          {/* ① 製品選択カード */}
+          <div style={s.card}>
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>💊 サプリメントを選択</div>
+            <div style={{ fontSize: 12, color: '#888', marginBottom: 12, lineHeight: 1.6 }}>
+              カテゴリから選ぶか、製品名で検索してください
+            </div>
+
+            {/* 検索 */}
+            <input
+              value={suppSearchText}
+              onChange={e => {
+                const v = e.target.value
+                setSuppSearchText(v)
+                setSuppCategory('')
+                if (v.length >= 2) searchSupplements(v, '')
+                else if (v.length === 0) setSuppSearchResults([])
+              }}
+              placeholder="例: ザバス、ON、DHC、ホエイ..."
+              style={{ ...s.input, marginBottom: 10 }}
+            />
+
+            {/* カテゴリ選択 */}
+            {!suppSearchText && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                {suppCategories.map(cat => (
+                  <button key={cat.label} onClick={() => {
+                    const newCat = suppCategory === cat.label ? '' : cat.label
+                    setSuppCategory(newCat)
+                    if (newCat) searchSupplements('', newCat)
+                    else setSuppSearchResults([])
+                  }}
+                    style={{ padding: '6px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer',
+                      background: suppCategory === cat.label ? '#1a1a2e' : '#f0f0f0',
+                      color: suppCategory === cat.label ? '#e8c97e' : '#555' }}>
+                    {cat.icon} {cat.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* 製品リスト（Supabase検索結果） */}
+            {searchingSupp ? (
+              <div style={{ textAlign: 'center', color: '#aaa', fontSize: 12, padding: '12px 0' }}>検索中...</div>
+            ) : suppSearchResults.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {suppSearchResults.map(p => (
+                  <button key={p.id} onClick={() => { setSuppProduct(p); setSuppServings(JSON.parse(p.servings_options||'[1]')[0]) }}
+                    style={{ background: suppProduct?.id === p.id ? '#1a1a2e' : '#f8f8f8',
+                      border: suppProduct?.id === p.id ? '2px solid #1a1a2e' : '1px solid #eee',
+                      borderRadius: 10, padding: '10px 12px', cursor: 'pointer', textAlign: 'left' }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: suppProduct?.id === p.id ? '#e8c97e' : '#1a1a2e' }}>
+                      {p.brand}　{p.name}
+                    </div>
+                    <div style={{ fontSize: 11, color: suppProduct?.id === p.id ? 'rgba(232,201,126,0.8)' : '#888', marginTop: 2 }}>
+                      {p.serving_unit} / P{p.protein_per_serving}g・F{p.fat_per_serving}g・C{p.carbs_per_serving}g・{p.calories_per_serving}kcal
+                      {p.special_per_serving && ` / ${p.special_per_serving}`}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : (suppCategory || suppSearchText) ? (
+              <div style={{ textAlign: 'center', color: '#aaa', fontSize: 12, padding: '12px 0' }}>
+                製品が見つかりません
+              </div>
+            ) : null}
           </div>
 
-          <div style={{ marginBottom: 10 }}>
-            <label style={s.label}>サプリ名 *</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
-              {SUPP_PRESETS.map(name => (
-                <button key={name} onClick={() => setSuppName(name)}
-                  style={{ padding: '5px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer', background: suppName === name ? '#1a1a2e' : '#f0f0f0', color: suppName === name ? '#e8c97e' : '#555' }}>
-                  {name}
-                </button>
-              ))}
-            </div>
-          </div>
+          {/* ② 量・タイミング選択（製品選択後に表示） */}
+          {suppProduct && (
+            <div style={s.card}>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
+                ✅ {suppProduct.brand} {suppProduct.name}
+              </div>
 
-          <div style={s.row}>
-            <div style={{ flex: 1 }}>
-              <label style={s.label}>量・錠数</label>
-              <input value={suppAmount} onChange={e => setSuppAmount(e.target.value)} placeholder="例: 1錠・30g" style={s.input} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={s.label}>タイミング</label>
-              <select value={suppTiming} onChange={e => setSuppTiming(e.target.value)} style={{ ...s.input, appearance: 'none' }}>
-                {['朝食前', '朝食後', '昼食後', '運動前', '運動後', '夕食後', '就寝前'].map(t => <option key={t}>{t}</option>)}
-              </select>
-            </div>
-          </div>
-
-          <button style={s.saveBtn(!suppName || savingSupp)} onClick={saveSupplement} disabled={!suppName || savingSupp}>
-            {savingSupp ? '保存中...' : '記録する'}
-          </button>
-
-          {suppRecords.length > 0 && (
-            <div style={{ marginTop: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#888', marginBottom: 6 }}>今日のサプリ</div>
-              {suppRecords.map((r, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid #f5f5f5', fontSize: 13 }}>
-                  <div>
-                    <span style={{ fontWeight: 600 }}>{r.supp_name}</span>
-                    {r.amount && <span style={{ color: '#888', fontSize: 11, marginLeft: 6 }}>{r.amount}</span>}
-                  </div>
-                  <span style={{ fontSize: 11, color: '#888', background: '#f0f0f0', padding: '2px 8px', borderRadius: 20 }}>{r.timing}</span>
+              {/* サービング数選択 */}
+              <div style={{ marginBottom: 10 }}>
+                <label style={s.label}>量（{suppProduct.serving_unit}）</label>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {JSON.parse(suppProduct.servings_options || '[1,2]').map(v => (
+                    <button key={v} onClick={() => setSuppServings(v)}
+                      style={{ flex: 1, padding: '8px 0', borderRadius: 10, fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
+                        background: suppServings === v ? '#1a1a2e' : '#f0f0f0',
+                        color: suppServings === v ? '#e8c97e' : '#555' }}>
+                      ×{v}
+                    </button>
+                  ))}
                 </div>
-              ))}
+              </div>
+
+              {/* 栄養素プレビュー */}
+              <div style={{ background: '#EAF3DE', borderRadius: 10, padding: '10px 12px', marginBottom: 10 }}>
+                <div style={{ fontSize: 11, color: '#639922', fontWeight: 700, marginBottom: 6 }}>
+                  今回の摂取栄養素（×{suppServings}）
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {[
+                    ['カロリー', Math.round((suppProduct.calories_per_serving||0)*suppServings), 'kcal', '#555'],
+                    ['タンパク質', Math.round((suppProduct.protein_per_serving||0)*suppServings*10)/10, 'g', '#185FA5'],
+                    ['脂質', Math.round((suppProduct.fat_per_serving||0)*suppServings*10)/10, 'g', '#BA7517'],
+                    ['炭水化物', Math.round((suppProduct.carbs_per_serving||0)*suppServings*10)/10, 'g', '#3B6D11'],
+                  ].map(([l,v,u,c]) => (
+                    <div key={l} style={{ background: '#fff', borderRadius: 8, padding: '6px 10px', textAlign: 'center', minWidth: 60 }}>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: c }}>{v}<span style={{ fontSize: 10 }}>{u}</span></div>
+                      <div style={{ fontSize: 10, color: '#888' }}>{l}</div>
+                    </div>
+                  ))}
+                </div>
+                {Object.entries(suppProduct.vitamins_per_serving||{}).filter(([,v])=>v>0).length > 0 && (
+                  <div style={{ fontSize: 11, color: '#3B6D11', marginTop: 6 }}>
+                    ビタミン: {Object.entries(suppProduct.vitamins_per_serving).filter(([,v])=>v>0).map(([k,v])=>`${k}:${Math.round(v*suppServings*100)/100}`).join(', ')}
+                  </div>
+                )}
+                {Object.entries(suppProduct.minerals_per_serving||{}).filter(([,v])=>v>0).length > 0 && (
+                  <div style={{ fontSize: 11, color: '#185FA5', marginTop: 3 }}>
+                    ミネラル: {Object.entries(suppProduct.minerals_per_serving).filter(([,v])=>v>0).map(([k,v])=>`${k}:${Math.round(v*suppServings*100)/100}`).join(', ')}
+                  </div>
+                )}
+                {suppProduct.special_per_serving && (
+                  <div style={{ fontSize: 11, color: '#7C3AED', marginTop: 3 }}>その他: {suppProduct.special_per_serving}</div>
+                )}
+              </div>
+
+              {/* タイミング */}
+              <div style={{ marginBottom: 10 }}>
+                <label style={s.label}>摂取タイミング</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {['朝食前','朝食後','昼食後','運動前','運動後','夕食後','就寝前'].map(t => (
+                    <button key={t} onClick={() => setSuppTiming(t)}
+                      style={{ padding: '6px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer',
+                        background: suppTiming === t ? '#1a1a2e' : '#f0f0f0',
+                        color: suppTiming === t ? '#e8c97e' : '#555' }}>
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button style={s.saveBtn(savingSupp)} onClick={saveSupplement} disabled={savingSupp}>
+                {savingSupp ? '保存中...' : '記録する'}
+              </button>
             </div>
           )}
-        </div>
+
+          {/* ③ 今日のサプリ記録＋食事との相互評価 */}
+          {suppRecords.length > 0 && (
+            <div style={s.card}>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>📋 今日のサプリ記録</div>
+              {suppRecords.map((r, i) => (
+                <div key={i} style={{ padding: '8px 0', borderBottom: '1px solid #f5f5f5' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{r.supp_name}</span>
+                    <span style={{ fontSize: 11, color: '#888', background: '#f0f0f0', padding: '2px 8px', borderRadius: 20 }}>{r.timing}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{r.amount}</div>
+                  {r.nutrients && (
+                    <div style={{ fontSize: 11, color: '#3B6D11', marginTop: 3 }}>
+                      P{r.nutrients.protein}g・F{r.nutrients.fat}g・C{r.nutrients.carbs}g・{r.nutrients.calories}kcal
+                      {r.nutrients.special && ` / ${r.nutrients.special}`}
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {/* サプリ合計栄養素 */}
+              {(() => {
+                const totals = suppRecords.reduce((acc, r) => {
+                  if (!r.nutrients) return acc
+                  acc.protein += r.nutrients.protein || 0
+                  acc.calories += r.nutrients.calories || 0
+                  Object.entries(r.nutrients.vitamins||{}).forEach(([k,v]) => { acc.vitamins[k] = (acc.vitamins[k]||0) + v })
+                  Object.entries(r.nutrients.minerals||{}).forEach(([k,v]) => { acc.minerals[k] = (acc.minerals[k]||0) + v })
+                  return acc
+                }, { protein: 0, calories: 0, vitamins: {}, minerals: {} })
+
+                const vitList = Object.entries(totals.vitamins).filter(([,v])=>v>0)
+                const minList = Object.entries(totals.minerals).filter(([,v])=>v>0)
+                return (totals.protein > 0 || vitList.length > 0 || minList.length > 0) ? (
+                  <div style={{ background: '#f8f8f8', borderRadius: 10, padding: '10px 12px', marginTop: 10 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#555', marginBottom: 6 }}>
+                      💊 今日のサプリ合計
+                    </div>
+                    {totals.protein > 0 && (
+                      <div style={{ fontSize: 12, color: '#185FA5' }}>タンパク質: +{Math.round(totals.protein*10)/10}g</div>
+                    )}
+                    {vitList.length > 0 && (
+                      <div style={{ fontSize: 11, color: '#3B6D11', marginTop: 3 }}>
+                        ビタミン: {vitList.map(([k,v])=>`${k}+${Math.round(v*100)/100}`).join('・')}
+                      </div>
+                    )}
+                    {minList.length > 0 && (
+                      <div style={{ fontSize: 11, color: '#BA7517', marginTop: 3 }}>
+                        ミネラル: {minList.map(([k,v])=>`${k}+${Math.round(v*10)/10}`).join('・')}
+                      </div>
+                    )}
+                  </div>
+                ) : null
+              })()}
+            </div>
+          )}
+        </>
       )}
     </>
   )
