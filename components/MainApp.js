@@ -4,12 +4,14 @@ import PhotoTab from './tabs/PhotoTab'
 import HistoryTab from './tabs/HistoryTab'
 import AdviceTab from './tabs/AdviceTab'
 import ProfileTab from './tabs/ProfileTab'
+import BloodTestTab from './tabs/BloodTestTab'
 
 const TABS = [
-  { id:'photo',   icon:'📷', label:'食事記録' },
-  { id:'history', icon:'📋', label:'履歴' },
-  { id:'advice',  icon:'💬', label:'相談' },
-  { id:'profile', icon:'👤', label:'プロフィール' },
+  { id:'photo',     icon:'📷', label:'食事記録' },
+  { id:'history',   icon:'📋', label:'履歴' },
+  { id:'bloodtest', icon:'🩸', label:'血液検査' },
+  { id:'advice',    icon:'💬', label:'相談' },
+  { id:'profile',   icon:'👤', label:'プロフィール' },
 ]
 
 const DAILY_TARGETS = {
@@ -153,10 +155,11 @@ export default function MainApp({ session, profile, onProfileUpdate }) {
         {tab === 'photo' && (
           <DailySummaryCard profile={profile} dailyIntake={dailyIntake} defaultOpen={false} />
         )}
-        {tab === 'photo'   && <PhotoTab profile={profile} onRecord={addRecord} />}
-        {tab === 'history' && <HistoryTab profile={profile} dailyIntake={dailyIntake} onDelete={removeRecord} />}
-        {tab === 'advice'  && <AdviceTab profile={profile} dailyIntake={dailyIntake} />}
-        {tab === 'profile' && <ProfileTab session={session} profile={profile} onProfileUpdate={onProfileUpdate} />}
+        {tab === 'photo'     && <PhotoTab profile={profile} onRecord={addRecord} />}
+        {tab === 'history'   && <HistoryTab profile={profile} dailyIntake={dailyIntake} onDelete={removeRecord} />}
+        {tab === 'bloodtest' && <BloodTestTab profile={profile} />}
+        {tab === 'advice'    && <AdviceTab profile={profile} dailyIntake={dailyIntake} />}
+        {tab === 'profile'   && <ProfileTab session={session} profile={profile} onProfileUpdate={onProfileUpdate} />}
       </div>
 
       {/* ナビゲーションバー */}

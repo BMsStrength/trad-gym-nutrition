@@ -308,7 +308,18 @@ export default function PhotoTab({ profile, onRecord }) {
           {/* AIアドバイス */}
           <div style={s.adviceBox}>{activeResult.advice}</div>
 
-          {/* ★ 新機能：不足栄養素と食材・料理の提案 */}
+          {/* 食育・公衆栄養学ワンポイント */}
+          {activeResult.public_nutrition_tip && (
+            <div style={{ background:'#EFF6FF', border:'1px solid #BFDBFE', borderRadius:10, padding:'10px 12px', marginTop:10, display:'flex', gap:8, alignItems:'flex-start' }}>
+              <span style={{ fontSize:18, flexShrink:0 }}>📚</span>
+              <div>
+                <div style={{ fontSize:11, fontWeight:700, color:'#1E40AF', marginBottom:2 }}>食育ワンポイント</div>
+                <div style={{ fontSize:12, color:'#1D4ED8', lineHeight:1.6 }}>{activeResult.public_nutrition_tip}</div>
+              </div>
+            </div>
+          )}
+
+          {/* 不足栄養素と食材・料理の提案 */}
           <FoodSuggestions suggestions={activeResult.food_suggestions} />
         </div>
       )}

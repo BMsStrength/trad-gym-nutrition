@@ -119,7 +119,8 @@ ${profileSymptoms || symptoms ? `
     "リン":{"amount":数値,"unit":"mg","rda_pct":数値},
     "銅":{"amount":数値,"unit":"mg","rda_pct":数値}
   },
-  "advice": "アドバイス150〜250字",
+  "advice": "アドバイス150〜250字。①この食事の良い点 ②改善できる点 ③時間栄養学の視点（食べた時刻・次の食事のタイミング） ④体調改善への具体的な食事提案を含める。",
+  "public_nutrition_tip": "今日の食事から見る食育・生活習慣のワンポイント（80字以内。旬の食材・調理の工夫・食文化など実践的な豆知識を1つ）",
   "food_suggestions": [
     {
       "nutrient_name": "不足栄養素名（例：鉄分）",
