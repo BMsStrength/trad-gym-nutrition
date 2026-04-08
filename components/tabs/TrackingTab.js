@@ -17,6 +17,13 @@ const EXERCISE_PRESETS = [
 
 // サプリDBはSupabase supplements_masterテーブルから取得
 
+// ━━━ 安全なJSONパーサー（文字列/オブジェクト両対応） ━━━
+function safeJSON(val, fallback) {
+  if (!val) return fallback
+  if (typeof val === 'object') return val
+  try { return JSON.parse(val) } catch { return fallback }
+}
+
 const WATER_QUICK = [150, 200, 350, 500]
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━
@@ -246,10 +253,10 @@ export default function TrackingTab({ profile }) {
       fat:      Math.round((suppProduct.fat_per_serving      || 0) * s * 10) / 10,
       carbs:    Math.round((suppProduct.carbs_per_serving    || 0) * s * 10) / 10,
       vitamins: Object.fromEntries(
-        Object.entries(suppProduct.vitamins_per_serving || {}).map(([k,v]) => [k, Math.round(v*s*100)/100])
+        Object.entries(safeJSON(suppProduct.vitamins_per_serving, {})).map(([k,v]) => [k, Math.round(v*s*100)/100])
       ),
       minerals: Object.fromEntries(
-        Object.entries(suppProduct.minerals_per_serving || {}).map(([k,v]) => [k, Math.round(v*s*100)/100])
+        Object.entries(safeJSON(suppProduct.minerals_per_serving, {})).map(([k,v]) => [k, Math.round(v*s*100)/100])
       ),
       special: suppProduct.special_per_serving || null,
     }
@@ -770,7 +777,7 @@ export default function TrackingTab({ profile }) {
             ) : suppSearchResults.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {suppSearchResults.map(p => (
-                  <button key={p.id} onClick={() => { setSuppProduct(p); setSuppServings(JSON.parse(p.servings_options||'[1]')[0]) }}
+                  <button key={p.id} onClick={() => { setSuppProduct(p); setSuppServings(safeJSON(p.servings_options, [1])[0] || 1) }}
                     style={{ background: suppProduct?.id === p.id ? '#1a1a2e' : '#f8f8f8',
                       border: suppProduct?.id === p.id ? '2px solid #1a1a2e' : '1px solid #eee',
                       borderRadius: 10, padding: '10px 12px', cursor: 'pointer', textAlign: 'left' }}>
@@ -802,7 +809,7 @@ export default function TrackingTab({ profile }) {
               <div style={{ marginBottom: 10 }}>
                 <label style={s.label}>量（{suppProduct.serving_unit}）</label>
                 <div style={{ display: 'flex', gap: 6 }}>
-                  {JSON.parse(suppProduct.servings_options || '[1,2]').map(v => (
+                  {safeJSON(suppProduct.servings_options, [1, 2]).map(v => (
                     <button key={v} onClick={() => setSuppServings(v)}
                       style={{ flex: 1, padding: '8px 0', borderRadius: 10, fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
                         background: suppServings === v ? '#1a1a2e' : '#f0f0f0',
@@ -831,14 +838,14 @@ export default function TrackingTab({ profile }) {
                     </div>
                   ))}
                 </div>
-                {Object.entries(suppProduct.vitamins_per_serving||{}).filter(([,v])=>v>0).length > 0 && (
+                {Object.entries(safeJSON(suppProduct.vitamins_per_serving, {})).filter(([,v])=>v>0).length > 0 && (
                   <div style={{ fontSize: 11, color: '#3B6D11', marginTop: 6 }}>
-                    ビタミン: {Object.entries(suppProduct.vitamins_per_serving).filter(([,v])=>v>0).map(([k,v])=>`${k}:${Math.round(v*suppServings*100)/100}`).join(', ')}
+                    ビタミン: {Object.entries(safeJSON(suppProduct.vitamins_per_serving, {})).filter(([,v])=>v>0).map(([k,v])=>`${k}:${Math.round(v*suppServings*100)/100}`).join(', ')}
                   </div>
                 )}
-                {Object.entries(suppProduct.minerals_per_serving||{}).filter(([,v])=>v>0).length > 0 && (
+                {Object.entries(safeJSON(suppProduct.minerals_per_serving, {})).filter(([,v])=>v>0).length > 0 && (
                   <div style={{ fontSize: 11, color: '#185FA5', marginTop: 3 }}>
-                    ミネラル: {Object.entries(suppProduct.minerals_per_serving).filter(([,v])=>v>0).map(([k,v])=>`${k}:${Math.round(v*suppServings*100)/100}`).join(', ')}
+                    ミネラル: {Object.entries(safeJSON(suppProduct.minerals_per_serving, {})).filter(([,v])=>v>0).map(([k,v])=>`${k}:${Math.round(v*suppServings*100)/100}`).join(', ')}
                   </div>
                 )}
                 {suppProduct.special_per_serving && (
@@ -893,13 +900,13 @@ export default function TrackingTab({ profile }) {
                   if (!r.nutrients) return acc
                   acc.protein += r.nutrients.protein || 0
                   acc.calories += r.nutrients.calories || 0
-                  Object.entries(r.nutrients.vitamins||{}).forEach(([k,v]) => { acc.vitamins[k] = (acc.vitamins[k]||0) + v })
-                  Object.entries(r.nutrients.minerals||{}).forEach(([k,v]) => { acc.minerals[k] = (acc.minerals[k]||0) + v })
+                  Object.entries(safeJSON(r.nutrients.vitamins, {})).forEach(([k,v]) => { acc.vitamins[k] = (acc.vitamins[k]||0) + v })
+                  Object.entries(safeJSON(r.nutrients.minerals, {})).forEach(([k,v]) => { acc.minerals[k] = (acc.minerals[k]||0) + v })
                   return acc
                 }, { protein: 0, calories: 0, vitamins: {}, minerals: {} })
 
-                const vitList = Object.entries(totals.vitamins).filter(([,v])=>v>0)
-                const minList = Object.entries(totals.minerals).filter(([,v])=>v>0)
+                const vitList = Object.entries(safeJSON(totals.vitamins, {})).filter(([,v])=>v>0)
+                const minList = Object.entries(safeJSON(totals.minerals, {})).filter(([,v])=>v>0)
                 return (totals.protein > 0 || vitList.length > 0 || minList.length > 0) ? (
                   <div style={{ background: '#f8f8f8', borderRadius: 10, padding: '10px 12px', marginTop: 10 }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: '#555', marginBottom: 6 }}>
