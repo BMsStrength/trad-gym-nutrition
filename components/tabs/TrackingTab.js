@@ -103,21 +103,39 @@ export default function TrackingTab({ profile }) {
   const [suppRecords, setSuppRecords] = useState([])
   const [savingSupp, setSavingSupp] = useState(false)
 
+  // グラフ関連state
+  const [graphPeriod, setGraphPeriod] = useState('week') // 'week' | 'month'
+  const [mealTrends, setMealTrends] = useState([]) // 日別食事集計
+
   useEffect(() => { fetchAll() }, [])
 
   async function fetchAll() {
-    const from = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+    const from30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
     const uid = profile.id
-    const [b, w, e, s] = await Promise.all([
-      supabase.from('body_records').select('*').eq('user_id', uid).gte('recorded_at', from).order('recorded_at'),
+    const [b, w, e, s, m] = await Promise.all([
+      supabase.from('body_records').select('*').eq('user_id', uid).gte('recorded_at', from30).order('recorded_at'),
       supabase.from('water_records').select('*').eq('user_id', uid).gte('recorded_at', today + 'T00:00:00Z').order('recorded_at'),
       supabase.from('exercise_records').select('*').eq('user_id', uid).gte('recorded_at', today + 'T00:00:00Z').order('recorded_at', { ascending: false }),
       supabase.from('supplement_records').select('*').eq('user_id', uid).gte('recorded_at', today + 'T00:00:00Z').order('recorded_at', { ascending: false }),
+      supabase.from('meal_records').select('id,total_cal,protein,fat,carbs,recorded_at').eq('user_id', uid).gte('recorded_at', from30).order('recorded_at'),
     ])
     setBodyRecords(b.data || [])
     setWaterRecords(w.data || [])
     setExerciseRecords(e.data || [])
     setSuppRecords(s.data || [])
+
+    // 日別に食事記録を集計
+    const daily = {}
+    ;(m.data || []).forEach(r => {
+      const date = r.recorded_at.slice(0, 10)
+      if (!daily[date]) daily[date] = { date, cal: 0, protein: 0, fat: 0, carbs: 0, count: 0 }
+      daily[date].cal     += r.total_cal || 0
+      daily[date].protein += r.protein   || 0
+      daily[date].fat     += r.fat       || 0
+      daily[date].carbs   += r.carbs     || 0
+      daily[date].count   += 1
+    })
+    setMealTrends(Object.values(daily).sort((a, b) => a.date.localeCompare(b.date)))
   }
 
   // 今日の水分合計
@@ -128,11 +146,6 @@ export default function TrackingTab({ profile }) {
   // 今日の運動消費カロリー合計
   const totalExCal = exerciseRecords.reduce((s, r) => s + (r.calories_burned || 0), 0)
 
-  // 体重トレンドデータ（週次）
-  const bodyTrend = bodyRecords.slice(-14).map(r => ({
-    value: r.weight,
-    label: new Date(r.recorded_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })
-  }))
 
   // 体重記録保存
   async function saveBody() {
@@ -249,9 +262,19 @@ export default function TrackingTab({ profile }) {
             </div>
           </div>
 
+          {/* 期間切り替えボタン */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+            {[['week','7日間'],['month','30日間']].map(([id, label]) => (
+              <button key={id} onClick={() => setGraphPeriod(id)}
+                style={{ flex: 1, padding: '7px 0', borderRadius: 20, fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer', background: graphPeriod === id ? '#1a1a2e' : '#f0f0f0', color: graphPeriod === id ? '#e8c97e' : '#666' }}>
+                {label}
+              </button>
+            ))}
+          </div>
+
           {/* 体重トレンドグラフ */}
           <div style={s.card}>
-            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>⚖️ 体重トレンド（過去30日）</div>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>⚖️ 体重トレンド</div>
             {bodyRecords.length > 0 && (
               <div style={{ fontSize: 13, marginBottom: 8 }}>
                 <span style={{ fontWeight: 700, fontSize: 22 }}>{bodyRecords[bodyRecords.length - 1]?.weight}</span>
@@ -264,8 +287,158 @@ export default function TrackingTab({ profile }) {
                 )}
               </div>
             )}
-            <TrendChart data={bodyTrend} color="#185FA5" unit="kg" />
+            <TrendChart
+              data={(graphPeriod === 'week' ? bodyRecords.slice(-7) : bodyRecords).map(r => ({
+                value: r.weight,
+                label: new Date(r.recorded_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })
+              }))}
+              color="#185FA5" unit="kg"
+            />
           </div>
+
+          {/* 週次・月次 栄養グラフ */}
+          {mealTrends.length >= 2 && (() => {
+            const data = graphPeriod === 'week' ? mealTrends.slice(-7) : mealTrends
+            const calData  = data.map(d => ({ value: d.cal,     label: d.date.slice(5) }))
+            const protData = data.map(d => ({ value: d.protein, label: d.date.slice(5) }))
+            const carbData = data.map(d => ({ value: d.carbs,   label: d.date.slice(5) }))
+            const avgCal   = Math.round(data.reduce((s,d) => s + d.cal, 0) / data.length)
+            const avgProt  = Math.round(data.reduce((s,d) => s + d.protein, 0) / data.length)
+            return (
+              <div style={s.card}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>🍽️ 栄養摂取トレンド</div>
+
+                {/* グラフ切り替えタブ */}
+                {[
+                  { label: 'カロリー', data: calData, color: '#1a1a2e', unit: 'kcal', avg: avgCal, target: profile.targetCal },
+                  { label: 'タンパク質', data: protData, color: '#185FA5', unit: 'g', avg: avgProt, target: profile.pfcP },
+                  { label: '炭水化物', data: carbData, color: '#3B6D11', unit: 'g',
+                    avg: Math.round(data.reduce((s,d) => s + d.carbs, 0) / data.length), target: profile.pfcC },
+                ].map((item, idx) => (
+                  <div key={idx} style={{ marginBottom: 16 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>{item.label}</div>
+                      <div style={{ fontSize: 11, color: '#888' }}>
+                        平均 <span style={{ fontWeight: 700, color: item.color }}>{item.avg}{item.unit}</span>
+                        {item.target && <span style={{ color: '#aaa', marginLeft: 4 }}>/ 目標{item.target}{item.unit}</span>}
+                      </div>
+                    </div>
+                    <TrendChart data={item.data} color={item.color} unit={item.unit} targetLine={item.target} />
+                  </div>
+                ))}
+              </div>
+            )
+          })()}
+
+          {/* 食事カロリー × 体重変化 相関グラフ */}
+          {mealTrends.length >= 3 && bodyRecords.length >= 3 && (() => {
+            // 食事記録と体重記録が重なる日付のみ抽出
+            const bodyMap = {}
+            bodyRecords.forEach(r => { bodyMap[r.recorded_at.slice(0, 10)] = r.weight })
+            const corr = mealTrends
+              .filter(d => bodyMap[d.date])
+              .map(d => ({ date: d.date.slice(5), cal: d.cal, weight: bodyMap[d.date] }))
+
+            if (corr.length < 3) return (
+              <div style={s.card}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>📉 食事×体重 相関</div>
+                <div style={{ fontSize: 12, color: '#aaa', textAlign: 'center', padding: '12px 0' }}>
+                  食事記録と体重記録が重なる日が3日以上になると表示されます
+                </div>
+              </div>
+            )
+
+            const W = 300, H = 120, PAD = 30
+            const cals    = corr.map(d => d.cal)
+            const weights = corr.map(d => d.weight)
+            const calMin = Math.min(...cals) * 0.95, calMax = Math.max(...cals) * 1.05
+            const wMin   = Math.min(...weights) * 0.998, wMax = Math.max(...weights) * 1.002
+
+            const calPts = corr.map((d, i) => {
+              const x = PAD + (i / (corr.length - 1)) * (W - PAD * 2)
+              const y = H - PAD - ((d.cal - calMin) / (calMax - calMin || 1)) * (H - PAD * 2)
+              return { x, y, d }
+            })
+            const wPts = corr.map((d, i) => {
+              const x = PAD + (i / (corr.length - 1)) * (W - PAD * 2)
+              const y = H - PAD - ((d.weight - wMin) / (wMax - wMin || 1)) * (H - PAD * 2)
+              return { x, y, d }
+            })
+
+            const avgCal2   = Math.round(cals.reduce((a, b) => a + b, 0) / cals.length)
+            const latestW   = weights[weights.length - 1]
+            const firstW    = weights[0]
+            const wChange   = (latestW - firstW).toFixed(1)
+            const wColor    = wChange <= 0 ? '#3B6D11' : '#E24B4A'
+
+            return (
+              <div style={s.card}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>📉 食事カロリー × 体重 相関</div>
+                <div style={{ fontSize: 11, color: '#888', marginBottom: 10 }}>
+                  食事量と体重変化の関係を可視化します
+                </div>
+
+                {/* サマリー数値 */}
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                  <div style={s.statBox}>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: '#1a1a2e' }}>{avgCal2}</div>
+                    <div style={{ fontSize: 10, color: '#888' }}>平均摂取kcal</div>
+                  </div>
+                  <div style={s.statBox}>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: wColor }}>
+                      {wChange > 0 ? '+' : ''}{wChange}kg
+                    </div>
+                    <div style={{ fontSize: 10, color: '#888' }}>期間中の体重変化</div>
+                  </div>
+                  <div style={s.statBox}>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: '#555' }}>{corr.length}日分</div>
+                    <div style={{ fontSize: 10, color: '#888' }}>記録日数</div>
+                  </div>
+                </div>
+
+                {/* 2軸グラフ（SVG） */}
+                <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%' }}>
+                  {/* カロリー折れ線（黄金色） */}
+                  <polyline
+                    points={calPts.map(p => `${p.x},${p.y}`).join(' ')}
+                    fill="none" stroke="#e8c97e" strokeWidth="2" strokeLinejoin="round"
+                  />
+                  {/* 体重折れ線（青） */}
+                  <polyline
+                    points={wPts.map(p => `${p.x},${p.y}`).join(' ')}
+                    fill="none" stroke="#185FA5" strokeWidth="2.5" strokeLinejoin="round"
+                  />
+                  {corr.map((d, i) => (
+                    <g key={i}>
+                      <circle cx={calPts[i].x} cy={calPts[i].y} r="3" fill="#e8c97e" />
+                      <circle cx={wPts[i].x}   cy={wPts[i].y}   r="3" fill="#185FA5" />
+                    </g>
+                  ))}
+                </svg>
+
+                {/* 凡例 */}
+                <div style={{ display: 'flex', gap: 16, fontSize: 11, marginTop: 4 }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ display: 'inline-block', width: 16, height: 3, background: '#e8c97e', borderRadius: 2 }} />
+                    摂取カロリー
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ display: 'inline-block', width: 16, height: 3, background: '#185FA5', borderRadius: 2 }} />
+                    体重
+                  </span>
+                </div>
+
+                {/* 解釈コメント */}
+                <div style={{ background: '#f8f8f8', borderRadius: 8, padding: '8px 10px', marginTop: 10, fontSize: 12, color: '#555', lineHeight: 1.6 }}>
+                  {parseFloat(wChange) < -0.5
+                    ? '✅ 食事管理が体重減少に反映されています。この調子で継続しましょう！'
+                    : parseFloat(wChange) > 0.5
+                    ? '📊 体重が増加傾向です。摂取カロリーと目標カロリーを見直してみましょう。'
+                    : '⚖️ 体重が安定しています。現在の食事量を維持しながら栄養の質を高めましょう。'}
+                </div>
+              </div>
+            )
+          })()}
         </>
       )}
 
