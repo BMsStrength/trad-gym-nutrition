@@ -106,6 +106,7 @@ export default function TrackingTab({ profile }) {
   // グラフ関連state
   const [graphPeriod, setGraphPeriod] = useState('week') // 'week' | 'month'
   const [mealTrends, setMealTrends] = useState([]) // 日別食事集計
+  const [mealHourCounts, setMealHourCounts] = useState(Array(24).fill(0)) // 食事時刻分布
 
   useEffect(() => { fetchAll() }, [])
 
@@ -126,6 +127,7 @@ export default function TrackingTab({ profile }) {
 
     // 日別に食事記録を集計
     const daily = {}
+    const hourCounts = Array(24).fill(0) // 時刻帯カウント
     ;(m.data || []).forEach(r => {
       const date = r.recorded_at.slice(0, 10)
       if (!daily[date]) daily[date] = { date, cal: 0, protein: 0, fat: 0, carbs: 0, count: 0 }
@@ -134,8 +136,12 @@ export default function TrackingTab({ profile }) {
       daily[date].fat     += r.fat       || 0
       daily[date].carbs   += r.carbs     || 0
       daily[date].count   += 1
+      // 食事時刻の集計（JST: UTC+9）
+      const hour = (new Date(r.recorded_at).getUTCHours() + 9) % 24
+      hourCounts[hour]++
     })
     setMealTrends(Object.values(daily).sort((a, b) => a.date.localeCompare(b.date)))
+    setMealHourCounts(hourCounts)
   }
 
   // 今日の水分合計
@@ -330,6 +336,12 @@ export default function TrackingTab({ profile }) {
             )
           })()}
 
+          {/* 食事時刻の傾向（時間栄養学） */}
+          {mealTrends.length >= 3 && (() => {
+            // meal_recordsから時刻帯を分析
+            return null // meal_recordsの時刻データはTrackingTabで別途取得が必要なため後続で対応
+          })()}
+
           {/* 食事カロリー × 体重変化 相関グラフ */}
           {mealTrends.length >= 3 && bodyRecords.length >= 3 && (() => {
             // 食事記録と体重記録が重なる日付のみ抽出
@@ -435,6 +447,62 @@ export default function TrackingTab({ profile }) {
                     : parseFloat(wChange) > 0.5
                     ? '📊 体重が増加傾向です。摂取カロリーと目標カロリーを見直してみましょう。'
                     : '⚖️ 体重が安定しています。現在の食事量を維持しながら栄養の質を高めましょう。'}
+                </div>
+              </div>
+            )
+          })()}
+          {/* 食事時刻の分布（時間栄養学） */}
+          {mealHourCounts.some(c => c > 0) && (() => {
+            const maxCount = Math.max(...mealHourCounts, 1)
+            // 主な食事時間帯を特定
+            const lateNight = mealHourCounts.slice(21, 24).reduce((a,b)=>a+b,0) + mealHourCounts.slice(0,5).reduce((a,b)=>a+b,0)
+            const total = mealHourCounts.reduce((a,b)=>a+b,0)
+            const lateRatio = total > 0 ? Math.round(lateNight / total * 100) : 0
+            // 朝食の時刻帯
+            const breakfastHours = mealHourCounts.slice(5,10).reduce((a,b)=>a+b,0)
+            const hasBreakfast = breakfastHours > 0
+            return (
+              <div style={s.card}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>🕐 食事時刻の傾向（時間栄養学）</div>
+                <div style={{ fontSize: 11, color: '#888', marginBottom: 12 }}>いつ食べているかを可視化します</div>
+
+                {/* 24時間バーチャート */}
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 60, marginBottom: 6 }}>
+                  {mealHourCounts.map((count, hour) => {
+                    const h = count / maxCount
+                    const isLate = hour >= 21 || hour <= 4
+                    const isBreakfast = hour >= 5 && hour <= 9
+                    const isMorning = hour >= 10 && hour <= 13
+                    const color = isLate ? '#E24B4A' : isBreakfast ? '#3B6D11' : isMorning ? '#185FA5' : '#1a1a2e'
+                    return (
+                      <div key={hour} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div style={{ width: '100%', height: Math.max(2, h * 52), background: count > 0 ? color : '#f0f0f0', borderRadius: '2px 2px 0 0', transition: 'height 0.3s' }} />
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* 時刻ラベル */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#aaa', marginBottom: 10 }}>
+                  {['0','6','12','18','23'].map(h => <span key={h}>{h}時</span>)}
+                </div>
+
+                {/* 凡例 */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, fontSize: 11, marginBottom: 10 }}>
+                  {[['#3B6D11','朝食帯(5-9時)'],['#185FA5','昼食帯(10-13時)'],['#1a1a2e','夕食帯(14-20時)'],['#E24B4A','夜遅い食事(21時以降)']].map(([c,l]) => (
+                    <span key={l} style={{ display:'flex', alignItems:'center', gap:3 }}>
+                      <span style={{ display:'inline-block', width:10, height:10, background:c, borderRadius:2 }} />{l}
+                    </span>
+                  ))}
+                </div>
+
+                {/* 時間栄養学コメント */}
+                <div style={{ background: lateRatio >= 20 ? '#FCEBEB' : '#EAF3DE', borderRadius: 8, padding: '8px 10px', fontSize: 12, lineHeight: 1.6, color: lateRatio >= 20 ? '#A32D2D' : '#3B6D11' }}>
+                  {lateRatio >= 20
+                    ? `⚠️ 食事の${lateRatio}%が21時以降です。夜遅い食事は同じカロリーでも脂肪として蓄積されやすくなります。`
+                    : !hasBreakfast
+                    ? '⚠️ 朝食の記録がありません。朝食は体内時計をリセットし代謝スイッチをONにする重要な食事です。'
+                    : '✅ 食事のタイミングが良好です。この習慣を維持しましょう。'}
                 </div>
               </div>
             )

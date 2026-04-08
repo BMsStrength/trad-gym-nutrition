@@ -97,10 +97,16 @@ function FoodSuggestions({ suggestions }) {
 
 export default function PhotoTab({ profile, onRecord }) {
   const [activeMeal, setActiveMeal] = useState('breakfast')
+  // 現在時刻をHH:MM形式で返すヘルパー
+  function nowTime() {
+    const now = new Date()
+    return now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0')
+  }
+
   const [mealData, setMealData] = useState({
-    breakfast: { images: [], note: '', symptoms: '' },
-    lunch:     { images: [], note: '', symptoms: '' },
-    dinner:    { images: [], note: '', symptoms: '' },
+    breakfast: { images: [], note: '', symptoms: '', eaten_at: nowTime() },
+    lunch:     { images: [], note: '', symptoms: '', eaten_at: nowTime() },
+    dinner:    { images: [], note: '', symptoms: '', eaten_at: nowTime() },
   })
   const [analyzing, setAnalyzing] = useState(null)
   const [results, setResults] = useState({})
@@ -159,6 +165,12 @@ export default function PhotoTab({ profile, onRecord }) {
       })
       const data = await res.json()
       if (data.error) throw new Error(data.error)
+      // 食事時刻を組み立て（今日の日付 + 入力時刻）
+      const todayDate = new Date().toISOString().slice(0, 10)
+      const eatenAt = meal.eaten_at
+        ? new Date(todayDate + 'T' + meal.eaten_at + ':00').toISOString()
+        : new Date().toISOString()
+
       const { data: inserted } = await supabase.from('meal_records').insert({
         user_id: profile.id,
         meal_name: data.meal_name,
@@ -172,7 +184,7 @@ export default function PhotoTab({ profile, onRecord }) {
         advice: data.advice,
         note: meal.note,
         symptoms: meal.symptoms,
-        recorded_at: new Date().toISOString(),
+        recorded_at: eatenAt,
       }).select().single()
       // idつきでdailyIntakeに追加（履歴タブで削除できるようにするため）
       onRecord(inserted || data)
@@ -257,6 +269,26 @@ export default function PhotoTab({ profile, onRecord }) {
         placeholder={'例: 「今日は胃もたれがある」\n例: 「便秘3日目、お腹が張っている」\n例: 「特になし」'}
         style={{height:60, width:'100%', borderRadius:10, border:'1px solid #ddd', padding:'8px', fontSize:13, fontFamily:'inherit', resize:'none'}}
       />
+
+      {/* 食事時刻 */}
+      <div style={s.secTitle}>食事をした時刻</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <input
+          type="time"
+          value={activeMealData.eaten_at}
+          onChange={e => updateField(activeMeal, 'eaten_at', e.target.value)}
+          style={{ flex: 1, borderRadius: 10, border: '1px solid #ddd', padding: '9px 12px', fontSize: 13 }}
+        />
+        <button
+          onClick={() => updateField(activeMeal, 'eaten_at', (() => { const n = new Date(); return n.getHours().toString().padStart(2,'0') + ':' + n.getMinutes().toString().padStart(2,'0') })())}
+          style={{ background: '#f0f0f0', border: 'none', borderRadius: 10, padding: '9px 12px', fontSize: 12, color: '#555', cursor: 'pointer', whiteSpace: 'nowrap' }}
+        >
+          今の時刻
+        </button>
+      </div>
+      <div style={{ fontSize: 11, color: '#aaa', marginBottom: 4 }}>
+        ※ まとめて入力する場合は実際に食べた時間に変更してください
+      </div>
 
       {/* 分析ボタン */}
       {isAnalyzing

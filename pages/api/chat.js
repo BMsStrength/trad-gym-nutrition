@@ -11,7 +11,7 @@ const GOAL_LABELS = {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  const { message, profile, dailyIntake, history } = req.body
+  const { message, profile, dailyIntake, history, trends, timingTrends } = req.body
   const bmi = Math.round(profile.weight / ((profile.height / 100) ** 2) * 10) / 10
   const consumed = (dailyIntake || []).reduce((s, r) => s + r.total_cal, 0)
   const goals = profile.goals || [profile.goal]
@@ -35,6 +35,19 @@ export default async function handler(req, res) {
 - 登録症状：${profileSymptoms}
 - 今日の摂取カロリー：${consumed} kcal
 - 今日の食事：${(dailyIntake||[]).map(r=>r.meal_name+'('+r.total_cal+'kcal)').join('、') || 'まだ記録なし'}
+
+${trends ? `━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【過去の食事傾向データ（学習済み）】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${trends}
+${timingTrends ? `
+【食事時刻の傾向（時間栄養学）】
+${timingTrends}` : ''}
+
+⚑ 上記の傾向を必ず参照して回答すること。
+「いつも〇〇が不足しがちですね」「最近の傾向として〇〇が気になります」など
+蓄積データに基づいた個別化されたアドバイスを優先すること。
+食事時刻の傾向がある場合は時間栄養学の観点からも具体的にアドバイスすること。` : '※ まだ食事記録が少ないため傾向分析なし。記録が増えるほど精度が上がります。'}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 【自動適用モード】
