@@ -17,9 +17,67 @@ const TIPS = [
   { icon:'📸', title:'複数枚撮影', desc:'同じ料理を異なる角度で2〜3枚撮ると、立体的に量を推定できて精度が上がります' },
 ]
 
+// レシピモーダル
+function RecipeModal({ dish, onClose }) {
+  if (!dish) return null
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:2000, display:'flex', alignItems:'flex-end' }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{ background:'#fff', borderRadius:'20px 20px 0 0', width:'100%', maxHeight:'85vh', overflowY:'auto', padding:'20px 16px' }}>
+        {/* ヘッダー */}
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:14 }}>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:16, fontWeight:700, color:'#1a1a2e' }}>🍴 {dish.dish_name}</div>
+            {dish.calories_approx && (
+              <div style={{ fontSize:12, color:'#888', marginTop:3 }}>{dish.calories_approx}</div>
+            )}
+          </div>
+          <button onClick={onClose} style={{ background:'#f0f0f0', border:'none', borderRadius:'50%', width:28, height:28, cursor:'pointer', fontSize:14 }}>✕</button>
+        </div>
+
+        {/* 目標との適合性 */}
+        {dish.goal_fit && (
+          <div style={{ background:'#EAF3DE', border:'1px solid #C0DD97', borderRadius:10, padding:'8px 12px', marginBottom:14 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:'#3B6D11', marginBottom:2 }}>✅ あなたの目標との相性</div>
+            <div style={{ fontSize:12, color:'#3B6D11', lineHeight:1.6 }}>{dish.goal_fit}</div>
+          </div>
+        )}
+
+        {/* 調理のコツ */}
+        {dish.tip && (
+          <div style={{ background:'#f8f8f8', borderLeft:'3px solid #e8c97e', borderRadius:'0 8px 8px 0', padding:'8px 12px', marginBottom:14 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:'#B45309', marginBottom:2 }}>💡 ポイント</div>
+            <div style={{ fontSize:12, color:'#555', lineHeight:1.6 }}>{dish.tip}</div>
+          </div>
+        )}
+
+        {/* レシピ手順 */}
+        {dish.recipe_steps && dish.recipe_steps.length > 0 && (
+          <div>
+            <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:10 }}>📋 作り方</div>
+            {dish.recipe_steps.map((step, i) => (
+              <div key={i} style={{ display:'flex', gap:10, marginBottom:10, alignItems:'flex-start' }}>
+                <div style={{ width:24, height:24, borderRadius:'50%', background:'#1a1a2e', color:'#e8c97e', fontSize:12, fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                  {i+1}
+                </div>
+                <div style={{ fontSize:13, color:'#333', lineHeight:1.7, flex:1 }}>{step}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <button onClick={onClose} style={{ width:'100%', background:'#1a1a2e', color:'#e8c97e', border:'none', borderRadius:12, padding:12, fontSize:14, fontWeight:600, cursor:'pointer', marginTop:10 }}>
+          閉じる
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // 不足栄養素と料理提案カード
 function FoodSuggestions({ suggestions }) {
-  const [openIdx, setOpenIdx] = useState(0) // 最初の1件はデフォルト展開
+  const [openIdx, setOpenIdx] = useState(0)
+  const [recipeModal, setRecipeModal] = useState(null) // 表示中のレシピ
 
   if (!suggestions || suggestions.length === 0) return null
 
@@ -31,60 +89,48 @@ function FoodSuggestions({ suggestions }) {
 
       {suggestions.map((s, si) => (
         <div key={si} style={{ border: '1px solid #e8e8e8', borderRadius: 12, marginBottom: 8, overflow: 'hidden' }}>
-          {/* ヘッダー（タップで開閉） */}
           <button
             onClick={() => setOpenIdx(openIdx === si ? -1 : si)}
-            style={{
-              width: '100%', background: openIdx === si ? '#1a1a2e' : '#f8f8f8',
-              border: 'none', padding: '10px 12px', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              textAlign: 'left',
-            }}
+            style={{ width:'100%', background: openIdx===si?'#1a1a2e':'#f8f8f8', border:'none', padding:'10px 12px', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'space-between', textAlign:'left' }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 22 }}>{s.nutrient_icon}</span>
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <span style={{ fontSize:22 }}>{s.nutrient_icon}</span>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: openIdx === si ? '#e8c97e' : '#1a1a2e' }}>
-                  {s.nutrient_name}が不足
-                </div>
-                <div style={{ fontSize: 11, color: openIdx === si ? 'rgba(232,201,126,0.8)' : '#888', marginTop: 1 }}>
-                  {s.reason}
-                </div>
+                <div style={{ fontSize:13, fontWeight:700, color: openIdx===si?'#e8c97e':'#1a1a2e' }}>{s.nutrient_name}が不足</div>
+                <div style={{ fontSize:11, color: openIdx===si?'rgba(232,201,126,0.8)':'#888', marginTop:1 }}>{s.reason}</div>
               </div>
             </div>
-            <span style={{ fontSize: 12, color: openIdx === si ? '#e8c97e' : '#aaa', flexShrink: 0 }}>
-              {openIdx === si ? '▲' : '▼'}
-            </span>
+            <span style={{ fontSize:12, color: openIdx===si?'#e8c97e':'#aaa', flexShrink:0 }}>{openIdx===si?'▲':'▼'}</span>
           </button>
 
-          {/* 食材・料理リスト */}
           {openIdx === si && (
-            <div style={{ padding: '10px 12px', background: '#fff', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ padding:'10px 12px', background:'#fff', display:'flex', flexDirection:'column', gap:10 }}>
               {(s.foods || []).map((food, fi) => (
-                <div key={fi} style={{ background: '#f8f8f8', borderRadius: 10, padding: '10px 12px' }}>
-                  {/* 食材名 */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#1a1a2e' }}>
-                      🥘 {food.food_name}
-                    </span>
-                    <span style={{ fontSize: 11, color: '#888', background: '#e8e8e8', padding: '2px 8px', borderRadius: 20 }}>
-                      {food.amount}
-                    </span>
+                <div key={fi} style={{ background:'#f8f8f8', borderRadius:10, padding:'10px 12px' }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+                    <span style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>🥘 {food.food_name}</span>
+                    <span style={{ fontSize:11, color:'#888', background:'#e8e8e8', padding:'2px 8px', borderRadius:20 }}>{food.amount}</span>
                   </div>
-
-                  {/* 料理リスト */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
                     {(food.dishes || []).map((dish, di) => (
-                      <div key={di} style={{
-                        background: '#fff', borderRadius: 8, padding: '8px 10px',
-                        borderLeft: '3px solid #e8c97e',
-                      }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a2e', marginBottom: 3 }}>
-                          🍴 {dish.dish_name}
+                      <div key={di} style={{ background:'#fff', borderRadius:8, padding:'8px 10px', borderLeft:'3px solid #e8c97e' }}>
+                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:3 }}>
+                          <div style={{ fontSize:13, fontWeight:600, color:'#1a1a2e' }}>🍴 {dish.dish_name}</div>
+                          {/* レシピボタン */}
+                          {dish.recipe_steps && dish.recipe_steps.length > 0 && (
+                            <button onClick={() => setRecipeModal(dish)}
+                              style={{ background:'#1a1a2e', color:'#e8c97e', border:'none', borderRadius:20, padding:'3px 10px', fontSize:11, fontWeight:600, cursor:'pointer', flexShrink:0, marginLeft:6 }}>
+                              レシピ
+                            </button>
+                          )}
                         </div>
-                        <div style={{ fontSize: 11, color: '#666', lineHeight: 1.6 }}>
-                          💡 {dish.tip}
-                        </div>
+                        <div style={{ fontSize:11, color:'#666', lineHeight:1.6 }}>💡 {dish.tip}</div>
+                        {dish.calories_approx && (
+                          <div style={{ fontSize:10, color:'#aaa', marginTop:2 }}>📊 {dish.calories_approx}</div>
+                        )}
+                        {dish.goal_fit && (
+                          <div style={{ fontSize:10, color:'#3B6D11', marginTop:2 }}>✅ {dish.goal_fit}</div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -94,6 +140,9 @@ function FoodSuggestions({ suggestions }) {
           )}
         </div>
       ))}
+
+      {/* レシピモーダル */}
+      {recipeModal && <RecipeModal dish={recipeModal} onClose={() => setRecipeModal(null)} />}
     </div>
   )
 }
