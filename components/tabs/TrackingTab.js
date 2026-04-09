@@ -930,7 +930,7 @@ export default function TrackingTab({ profile }) {
                         </div>
                         {/* 量選択＋記録ボタン */}
                         <div style={{ display:'flex', gap:6, alignItems:'center' }}>
-                          <div style={{ display:'flex', gap:4', flex:1 }}>
+                          <div style={{ display:'flex', gap:4, flex:1 }}>
                             {opts.map(v => (
                               <button key={v} onClick={() => recordFromMySupp(ms, v, ms.default_timing)}
                                 disabled={savingSupp}
