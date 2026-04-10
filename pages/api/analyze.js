@@ -52,59 +52,25 @@ ${sym.includes('貧血') ? '- 貧血：ヘム鉄+ビタミンCの組み合わせ
 ${sym.includes('下痢') || sym.includes('腹痛') ? '- 胃腸症状：豆腐・白身魚・おかゆのみ。揚げ物・生野菜禁止' : ''}
 - recipe_stepsは各料理に3〜4ステップで必ず記載
 
-以下のJSON形式のみで回答：
+以下のJSON形式のみで回答（コメント・説明文不要）:
 {
   "meal_name": "食事名",
-  "identified_items": ["食材1"],
+  "identified_items": ["食材1","食材2"],
   "confidence": "high",
-  "total_cal": 0,
-  "protein": 0,
-  "fat": 0,
-  "carbs": 0,
-  "vitamins": {
-    "A":{"amount":0,"unit":"μgRE","rda_pct":0},
-    "B1":{"amount":0,"unit":"mg","rda_pct":0},
-    "B2":{"amount":0,"unit":"mg","rda_pct":0},
-    "B6":{"amount":0,"unit":"mg","rda_pct":0},
-    "B12":{"amount":0,"unit":"μg","rda_pct":0},
-    "C":{"amount":0,"unit":"mg","rda_pct":0},
-    "D":{"amount":0,"unit":"μg","rda_pct":0},
-    "E":{"amount":0,"unit":"mg","rda_pct":0},
-    "K":{"amount":0,"unit":"μg","rda_pct":0},
-    "葉酸":{"amount":0,"unit":"μg","rda_pct":0}
-  },
-  "minerals": {
-    "カルシウム":{"amount":0,"unit":"mg","rda_pct":0},
-    "鉄":{"amount":0,"unit":"mg","rda_pct":0},
-    "マグネシウム":{"amount":0,"unit":"mg","rda_pct":0},
-    "亜鉛":{"amount":0,"unit":"mg","rda_pct":0},
-    "カリウム":{"amount":0,"unit":"mg","rda_pct":0},
-    "ナトリウム":{"amount":0,"unit":"mg","rda_pct":0},
-    "リン":{"amount":0,"unit":"mg","rda_pct":0},
-    "銅":{"amount":0,"unit":"mg","rda_pct":0}
-  },
-  "advice": "アドバイス文",
-  "public_nutrition_tip": "食育ワンポイント",
+  "total_cal": 数値,
+  "protein": 数値,
+  "fat": 数値,
+  "carbs": 数値,
+  "vitamins": {"A":{"amount":数値,"unit":"μgRE","rda_pct":数値},"B1":{"amount":数値,"unit":"mg","rda_pct":数値},"B2":{"amount":数値,"unit":"mg","rda_pct":数値},"B6":{"amount":数値,"unit":"mg","rda_pct":数値},"B12":{"amount":数値,"unit":"μg","rda_pct":数値},"C":{"amount":数値,"unit":"mg","rda_pct":数値},"D":{"amount":数値,"unit":"μg","rda_pct":数値},"E":{"amount":数値,"unit":"mg","rda_pct":数値},"K":{"amount":数値,"unit":"μg","rda_pct":数値},"葉酸":{"amount":数値,"unit":"μg","rda_pct":数値}},
+  "minerals": {"カルシウム":{"amount":数値,"unit":"mg","rda_pct":数値},"鉄":{"amount":数値,"unit":"mg","rda_pct":数値},"マグネシウム":{"amount":数値,"unit":"mg","rda_pct":数値},"亜鉛":{"amount":数値,"unit":"mg","rda_pct":数値},"カリウム":{"amount":数値,"unit":"mg","rda_pct":数値},"ナトリウム":{"amount":数値,"unit":"mg","rda_pct":数値},"リン":{"amount":数値,"unit":"mg","rda_pct":数値},"銅":{"amount":数値,"unit":"mg","rda_pct":数値}},
+  "advice": "150字程度のアドバイス",
+  "public_nutrition_tip": "食育ポイント60字以内",
   "food_suggestions": [
     {
       "nutrient_name": "栄養素名",
       "nutrient_icon": "絵文字",
-      "reason": "不足理由",
-      "foods": [
-        {
-          "food_name": "食材名",
-          "amount": "目安量",
-          "dishes": [
-            {
-              "dish_name": "料理名",
-              "tip": "調理のコツ",
-              "calories_approx": "目安kcal",
-              "goal_fit": "目標との適合性",
-              "recipe_steps": ["手順1", "手順2", "手順3"]
-            }
-          ]
-        }
-      ]
+      "reason": "不足理由30字以内",
+      "foods": [{"food_name": "食材名","amount": "目安量","dishes": [{"dish_name": "料理名","tip": "コツ30字","calories_approx": "約XXXkcal","goal_fit": "目標適合","recipe_steps": ["手順1","手順2","手順3"]},{"dish_name": "料理名2","tip": "コツ","calories_approx": "約XXXkcal","goal_fit": "目標適合","recipe_steps": ["手順1","手順2","手順3"]}]},{"food_name": "食材名2","amount": "目安量","dishes": [{"dish_name": "料理名","tip": "コツ","calories_approx": "約XXXkcal","goal_fit": "目標適合","recipe_steps": ["手順1","手順2","手順3"]}]}]
     }
   ]
 }`
@@ -132,7 +98,7 @@ ${sym.includes('下痢') || sym.includes('腹痛') ? '- 胃腸症状：豆腐・
 
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 3000,
+      max_tokens: 4096,
       system: systemPrompt,
       messages: [{ role: 'user', content }],
     })
@@ -141,7 +107,21 @@ ${sym.includes('下痢') || sym.includes('腹痛') ? '- 胃腸症状：豆腐・
     const jsonMatch = raw.match(/\{[\s\S]*\}/)
     if (!jsonMatch) throw new Error('AI応答からJSONが取得できませんでした')
 
-    res.json(JSON.parse(jsonMatch[0]))
+    let parsed
+    try {
+      parsed = JSON.parse(jsonMatch[0])
+    } catch (jsonErr) {
+      // JSONが途中で切れた場合、food_suggestionsを削除して再試行
+      const truncated = jsonMatch[0]
+        .replace(/,\s*"food_suggestions"\s*:\s*\[[\s\S]*$/, '') + ',"food_suggestions":[]}'
+      try {
+        parsed = JSON.parse(truncated)
+        parsed._truncated = true
+      } catch(e2) {
+        throw new Error('JSONの解析に失敗しました。もう一度お試しください。')
+      }
+    }
+    res.json(parsed)
 
   } catch (e) {
     console.error('Analyze error:', e.message)
