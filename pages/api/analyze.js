@@ -50,7 +50,9 @@ ${isMuscle ? '- 筋肉増量：1食タンパク質30g以上を優先' : ''}
 ${sym.includes('便秘') ? '- 便秘：水溶性食物繊維・発酵食品を優先' : ''}
 ${sym.includes('貧血') ? '- 貧血：ヘム鉄+ビタミンCの組み合わせを必ずセット' : ''}
 ${sym.includes('下痢') || sym.includes('腹痛') ? '- 胃腸症状：豆腐・白身魚・おかゆのみ。揚げ物・生野菜禁止' : ''}
-- recipe_stepsは各料理に3〜4ステップで必ず記載
+- recipe_stepsは各料理に3ステップで記載
+- food_suggestionsは最も不足している栄養素1〜2件のみ（出力を短くする）
+- foods配下は1食材、dishes配下は1料理のみ
 
 以下のJSON形式のみで回答（コメント・説明文不要）:
 {
@@ -98,7 +100,7 @@ ${sym.includes('下痢') || sym.includes('腹痛') ? '- 胃腸症状：豆腐・
 
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 4096,
+      max_tokens: 1500,
       system: systemPrompt,
       messages: [{ role: 'user', content }],
     })
