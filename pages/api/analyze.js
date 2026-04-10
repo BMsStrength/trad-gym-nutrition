@@ -19,49 +19,68 @@ export default async function handler(req, res) {
     const height = p.height || 165
     const bmi    = Math.round(weight / ((height / 100) ** 2) * 10) / 10
     const goals  = (p.goals || [p.goal]).filter(Boolean)
-    const goalLabels = goals.map(g => GOAL_LABELS[g] || g).join('・') || '健康維持'
-    const sym    = (p.symptoms || []).join('・') || ''
-    const age    = p.age || 30
-    const mealHour  = mealTime ? parseInt(mealTime.split(':')[0]) : new Date().getHours()
-    const isDiet    = goals.includes('diet')
-    const isMuscle  = goals.includes('muscle')
+    const goalLabels  = goals.map(g => GOAL_LABELS[g] || g).join('・') || '健康維持'
+    const sym         = (p.symptoms || []).join('・') || ''
+    const age         = p.age || 30
+    const mealHour    = mealTime ? parseInt(mealTime.split(':')[0]) : new Date().getHours()
+    const isDiet      = goals.includes('diet')
+    const isMuscle    = goals.includes('muscle')
     const isLateNight = mealHour >= 21 || mealHour < 4
-    const isSenior  = age >= 65
+    const isSenior    = age >= 65
 
     const systemPrompt = `あなたは日本の管理栄養士AIです。食事写真・メモを分析し、栄養計算とアドバイスをJSONのみで返してください。
 
-【最重要ルール：二重計算の禁止】
-- 写真とメモは「同じ一食」を異なる角度から表したものです
-- 写真に写っているものとメモに書かれているものを別々に足してはいけません
-- メモに「鶏肉210g・玄米200g」と書いてあれば、写真でも同じ食材が見える場合は一度だけ計算する
-- メモに重量・食材名が明記されている場合はメモの情報を最優先し、写真は量の確認・補助として使う
-- タレ・ソース・薬味は大さじ1〜2程度(30〜50kcal)として計算し、忘れずに加える
+【絶対ルール①：二重計算の完全禁止】
+写真とメモは「まったく同じ一食」を別の角度から表したものです。
+写真に写っている食材とメモに書かれている食材を両方計算して足してはいけません。
+メモに重量・食材名が書いてある場合：メモの情報のみで計算し、写真は確認用として使う。
+「写真で見えた食材」を追加で計算することは絶対に禁止です。
 
-【栄養計算の基準値（必ず参照）】
-- 鶏むね肉（皮なし）: 116kcal/100g, P24g, F2g
-- 鶏もも肉（皮なし）: 138kcal/100g, P22g, F5g
-- 鶏もも肉（皮あり）: 204kcal/100g（皮なし指定がなければ皮なしで計算）
-- 白米ご飯（炊いた状態）: 156kcal/100g
-- 玄米ご飯（炊いた状態）: 165kcal/100g
-- ※「玄米200g」はご飯（炊いた状態）200g = 330kcal。乾燥重量で計算しないこと
+【絶対ルール②：正確なカロリーデータベース（必ずこの値を使う）】
+鶏肉（調理後・炊飯後の重量で計算すること）:
+- 鶏むね肉 皮なし: 116kcal/100g  P24.4g  F1.9g
+- 鶏むね肉 皮あり: 145kcal/100g  P21.3g  F5.9g
+- 鶏もも肉 皮なし: 138kcal/100g  P22.0g  F5.0g
+- 鶏もも肉 皮あり: 204kcal/100g  P17.3g  F14.2g
+- 「鶏肉」と書かれていて皮の指定がない場合: 皮なしで計算（カオマンガイは蒸し鶏なので皮なし）
+
+主食（炊飯後・調理後の重量で計算すること）:
+- 白米ご飯: 156kcal/100g  P2.5g  F0.3g  C35.6g
+- 玄米ご飯: 165kcal/100g  P2.8g  F1.0g  C35.6g
+- ※「玄米200g」= 炊いた玄米ご飯200g = 330kcal（乾燥玄米ではない）
+- ※メモに「200g」と書いてあれば必ずそのg数で計算する
+
+タレ・調味料（少量なので過大評価しない）:
+- カオマンガイのタレ: 30〜50kcal（小皿1杯程度）
+- 醤油大さじ1: 13kcal
+- ドレッシング大さじ1: 40〜80kcal
+
+計算例（カオマンガイ 鶏肉210g・玄米200g）:
+→ 鶏むね皮なし210g: 244kcal  P51.2g  F4.0g
+→ 玄米ご飯200g: 330kcal  P5.6g  F2.0g  C71.2g
+→ タレ・薬味: 50kcal  P2g  F1g  C8g
+→ 合計: 624kcal  P58.8g  F7.0g  C79.2g
+この例のように、メモに具体的な重量がある場合は必ずこの計算手順で求める。
 
 【ユーザー情報】
 - ${p.nickname || '会員'}（${age}歳・${p.gender === 'male' ? '男性' : '女性'}・${height}cm・${weight}kg・BMI${bmi}）
 - 目標：${goalLabels} / 目標：${p.targetCal || 2000}kcal / PFC：P${p.pfcP || 120}g F${p.pfcF || 60}g C${p.pfcC || 250}g
-${sym ? `- 症状：${sym}` : ''}${isSenior ? '\n- 65歳以上：タンパク質1.2g/kg以上' : ''}
+${sym ? `- 症状：${sym}` : ''}${isSenior ? '\n- 65歳以上：タンパク質1.2g/kg以上推奨' : ''}
 ${isLateNight ? '- 夜遅い食事：BMAL1リスクをadviceに記載' : ''}
 
-【料理提案ルール】
+【料理提案ルール（food_suggestions）】
+- 上位2つの不足栄養素を提案する
+- 各栄養素に食材1〜2個、各食材に料理1〜2品
+- recipe_stepsは3ステップ
 ${isDiet ? '- ダイエット：揚げ物禁止。蒸し・茹で・グリルのみ提案' : ''}
 ${isMuscle ? '- 筋肉増量：1食30g以上のタンパク質を優先' : ''}
 ${sym.includes('便秘') ? '- 便秘：水溶性食物繊維・発酵食品を優先' : ''}
 ${sym.includes('貧血') ? '- 貧血：ヘム鉄+ビタミンCセットを必ず提案' : ''}
 ${sym.includes('下痢') || sym.includes('腹痛') ? '- 胃腸症状：豆腐・白身魚・おかゆのみ。揚げ物・生野菜禁止' : ''}
 
-【出力形式】JSONのみ。他テキスト不要。
-- food_suggestions：不足栄養素を上位2件
-- 各栄養素に食材1〜2個、各食材に料理1〜2品
-- recipe_stepsは3ステップ
+【出力形式】
+JSONのみで返す。説明文・前置き・コードブロック（\`\`\`）は一切不要。
+最初の文字が { で始まり最後の文字が } で終わること。
 
 {
   "meal_name": "食事名",
@@ -120,8 +139,8 @@ ${sym.includes('下痢') || sym.includes('腹痛') ? '- 胃腸症状：豆腐・
     })
 
     const parts = []
-    if (imageList.length > 0) parts.push(`${imageList.length}枚の食事写真（メモと同じ食事の写真です）`)
-    if (note)     parts.push(`食事メモ（最優先情報）: ${note}`)
+    if (imageList.length > 0) parts.push(`${imageList.length}枚の食事写真（下のメモと同じ食事です。写真とメモを合算しないこと）`)
+    if (note)     parts.push(`食事メモ（この情報のみで計算すること）: ${note}`)
     if (symptoms) parts.push(`体調: ${symptoms}`)
     if (mealType) parts.push(`食事区分: ${mealType}`)
     if (parts.length === 0) parts.push('食事を分析してください。')
@@ -135,22 +154,42 @@ ${sym.includes('下痢') || sym.includes('腹痛') ? '- 胃腸症状：豆腐・
     })
 
     const raw = response.content.map(b => b.text || '').join('')
-    const jsonMatch = raw.match(/\{[\s\S]*\}/)
+
+    // コードブロックを除去してJSONを取り出す
+    const cleaned = raw
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim()
+
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
     if (!jsonMatch) throw new Error('AI応答からJSONが取得できませんでした')
 
+    // JSONパース（フォールバックなし — 正常パースのみ）
     let parsed
     try {
       parsed = JSON.parse(jsonMatch[0])
     } catch (jsonErr) {
-      // JSONが途中で切れた場合、food_suggestionsを除いて返す
-      const truncated = jsonMatch[0]
-        .replace(/,\s*"food_suggestions"\s*:\s*\[[\s\S]*$/, '') + ',"food_suggestions":[]}'
-      try {
-        parsed = JSON.parse(truncated)
-      } catch (e2) {
+      // パース失敗時は末尾を修復して再試行
+      // ※food_suggestionsを消すフォールバックは削除（誤動作の原因だったため）
+      const rawText = jsonMatch[0]
+      // 末尾の不完全な部分を削除して閉じる試み
+      const lastValidBrace = rawText.lastIndexOf('"}')
+      if (lastValidBrace > 0) {
+        const repaired = rawText.slice(0, lastValidBrace + 2) + ']'.repeat(3) + '}'
+        try {
+          parsed = JSON.parse(repaired)
+        } catch (e2) {
+          throw new Error('JSONの解析に失敗しました。もう一度お試しください。')
+        }
+      } else {
         throw new Error('JSONの解析に失敗しました。もう一度お試しください。')
       }
     }
+
+    // food_suggestionsが存在しない場合は空配列を設定
+    if (!parsed.food_suggestions) parsed.food_suggestions = []
+
     res.json(parsed)
 
   } catch (e) {
