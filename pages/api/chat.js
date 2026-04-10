@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { MOLECULAR_NUTRITION_SUMMARY } from '../../lib/molecularNutritionDB'
+import { MOLECULAR_NUTRITION_DB, MOLECULAR_NUTRITION_SUMMARY } from '../../lib/molecularNutritionDB'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -172,7 +172,10 @@ ${profile.age >= 65 ? `
 - 朝のたんぱく質が筋合成リズムを整える（時計遺伝子との連動）
 - カフェインは午後2時以降に摂ると睡眠の質・代謝回復に悪影響
 
-## 8. 分子栄養学・代謝・ホルモン統合データベース
+## 8. 分子栄養学・代謝・ホルモン統合データベース（世界最高レベル）
+${MOLECULAR_NUTRITION_DB}
+
+【コアプリンシプル・クイックリファレンス】
 ${MOLECULAR_NUTRITION_SUMMARY}
 
 ## 9. サプリメント評価

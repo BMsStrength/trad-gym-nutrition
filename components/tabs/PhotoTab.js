@@ -212,6 +212,7 @@ export default function PhotoTab({ profile, onRecord }) {
           note: meal.note,
           symptoms: meal.symptoms,
           mealType: MEALS.find(m => m.id === mealId)?.label,
+          mealTime: meal.eaten_at || new Date().toTimeString().slice(0,5),
           profile,
         }),
       })

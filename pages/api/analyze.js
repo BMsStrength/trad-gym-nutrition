@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { MOLECULAR_NUTRITION_SUMMARY } from '../../lib/molecularNutritionDB'
+import { MOLECULAR_NUTRITION_DB, MOLECULAR_NUTRITION_SUMMARY } from '../../lib/molecularNutritionDB'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -12,7 +12,7 @@ const GOAL_LABELS = {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  const { images, note, symptoms, mealType, profile } = req.body
+  const { images, note, symptoms, mealType, mealTime, profile } = req.body
   const bmi = Math.round(profile.weight / ((profile.height / 100) ** 2) * 10) / 10
 
   const goals = profile.goals || [profile.goal]
@@ -21,15 +21,35 @@ export default async function handler(req, res) {
     ? profile.symptoms.join('・') + (profile.symptoms_other ? '・' + profile.symptoms_other : '')
     : null
 
+  // 食事時刻の解析（時間栄養学）
+  const mealHour = mealTime ? parseInt(mealTime.split(':')[0]) : new Date().getHours()
+  const isLateNight = mealHour >= 21 || mealHour < 4
+  const isMorning = mealHour >= 6 && mealHour <= 9
+  const timeNutritionNote = isLateNight
+    ? `【⚠️ 時間栄養学アラート】この食事は${mealHour}時台です。BMAL1タンパク質が活性化する時間帯で、同じカロリーでも昼間の2〜3倍の脂肪蓄積効果があります。adviceに必ず夜遅い食事のリスクと翌日の対策を含めること。`
+    : isMorning
+    ? `【時間栄養学】朝食の時間帯。インスリン感受性が最高で体内時計のリセットに重要。朝のタンパク質摂取が筋合成リズムを整える。ポジティブなアドバイスを含めること。`
+    : ''
+
+  // 65歳以上の老年栄養学モード
+  const userAge = profile.age || 30
+  const isSenior = userAge >= 65
+  const seniorNote = isSenior
+    ? `【老年栄養学モード：${userAge}歳】サルコペニア予防のためタンパク質は1.2〜1.5g/kg/日が必要（若者より高め）。フレイル予防・骨粗鬆症（Ca+VitD3+K2）・脱水（口渇感が低下しているため積極的水分補給を推奨）・小分け頻回食を優先したアドバイスを必ず含めること。`
+    : ''
+
   const systemPrompt = `あなたは日本の管理栄養士資格を持つ、食品栄養分析の専門家AIです。
 以下の知識ベースを必ず参照して、正確な栄養計算と多角的なアドバイスを行ってください。
 
 ## 統合栄養学の分析視点（adviceとfood_suggestionsに反映すること）
 - 【調理学】揚げ物・炒め物はカロリー増加を計上。水溶性ビタミンは加熱・水さらしで損失。脂溶性ビタミンは油と同時摂取で吸収率UP
 - 【時間栄養学】朝食欠食・夜遅い食事は代謝効率が低下。朝のタンパク質が筋合成リズムを整える。夜22時以降の食事は同カロリーでも脂肪蓄積2倍
+${timeNutritionNote}
+${seniorNote}
 - 【病態栄養学】登録症状（糖尿病・高血圧・貧血・腸疾患等）に応じた疾患別栄養アドバイスを追加
 - 【分子栄養学・代謝・ホルモン】以下の統合データベースを必ず参照してアドバイスに反映すること：
-\${MOLECULAR_NUTRITION_SUMMARY}
+${MOLECULAR_NUTRITION_DB}
+【コアプリンシプル】${MOLECULAR_NUTRITION_SUMMARY}
 - 【スポーツ栄養学】筋肉増量目標には運動後30分以内のタンパク補給（20〜40g）を提案。ロイシン3g/食がmTOR活性化の閾値
 - 【行動栄養学】改善提案は「今日の夕食に〇〇を追加」レベルの実行しやすい小さな一歩で
 - 【サプリメント評価】食事だけで補えない栄養素にはサプリ補助も提案（バイオアベイラビリティを考慮した形態まで言及）
