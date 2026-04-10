@@ -627,19 +627,26 @@ ${profileSymptoms || symptoms ? `
     content.push({ type:'text', text: textParts.join('\n') })
 
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 2500,
+      model: 'claude-sonnet-4-5-20251001',
+      max_tokens: 4000,
       system: systemPrompt,
       messages: [{ role:'user', content }],
     })
 
     const raw = response.content.map(b => b.text || '').join('')
-    const clean = raw.replace(/```json|```/g, '').trim()
-    const data = JSON.parse(clean)
+    // JSONを確実に抽出（コードブロック・余分なテキストを除去）
+    const clean = raw.replace(/```json\n?|```/g, '').trim()
+    // JSONオブジェクトの部分だけ抽出
+    const jsonMatch = clean.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) {
+      console.error('JSON not found in response:', raw.slice(0, 500))
+      return res.status(500).json({ error: 'AI応答のJSON解析に失敗しました。もう一度お試しください。' })
+    }
+    const data = JSON.parse(jsonMatch[0])
     res.json(data)
   } catch(e) {
-    console.error(e)
-    res.status(500).json({ error: e.message })
+    console.error('Analyze error:', e.message)
+    res.status(500).json({ error: 'AI分析中にエラーが発生しました。もう一度お試しください。' })
   }
 }
 
