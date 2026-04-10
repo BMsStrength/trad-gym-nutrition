@@ -948,71 +948,74 @@ export default function TrackingTab({ profile }) {
             )}
 
             {/* ━━━ 検索タブ ━━━ */}
-            {suppView === 'search' && (<>
-            <div style={{ fontSize: 12, color: '#888', marginBottom: 8 }}>
-              カテゴリから選ぶか、製品名で検索してください
-            </div>
+            {suppView === 'search' && (
+              <div>
+                <div style={{ fontSize: 12, color: '#888', marginBottom: 8 }}>
+                  カテゴリから選ぶか、製品名で検索してください
+                </div>
 
-            {/* 検索 */}
-            <input
-              value={suppSearchText}
-              onChange={e => {
-                const v = e.target.value
-                setSuppSearchText(v)
-                setSuppCategory('')
-                if (v.length >= 2) {
-                  const timer = setTimeout(() => searchSupplements(v, ''), 400) // デバウンス400ms
-                  return () => clearTimeout(timer)
-                } else if (v.length === 0) setSuppSearchResults([])
-              }}
-              placeholder="例: ザバス、Optimum Nutrition、DHC、ホエイ..."
-              style={{ ...s.input, marginBottom: 10 }}
-            />
-
-            {/* カテゴリ選択 */}
-            {!suppSearchText && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
-                {suppCategories.map(cat => (
-                  <button key={cat.label} onClick={() => {
-                    const newCat = suppCategory === cat.label ? '' : cat.label
-                    setSuppCategory(newCat)
-                    if (newCat) searchSupplements('', newCat)
-                    else setSuppSearchResults([])
+                {/* 検索 */}
+                <input
+                  value={suppSearchText}
+                  onChange={e => {
+                    const v = e.target.value
+                    setSuppSearchText(v)
+                    setSuppCategory('')
+                    if (v.length >= 2) {
+                      const timer = setTimeout(() => searchSupplements(v, ''), 400)
+                      return () => clearTimeout(timer)
+                    } else if (v.length === 0) setSuppSearchResults([])
                   }}
-                    style={{ padding: '6px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer',
-                      background: suppCategory === cat.label ? '#1a1a2e' : '#f0f0f0',
-                      color: suppCategory === cat.label ? '#e8c97e' : '#555' }}>
-                    {cat.icon} {cat.label}
-                  </button>
-                ))}
+                  placeholder="例: ザバス、Optimum Nutrition、DHC、ホエイ..."
+                  style={{ ...s.input, marginBottom: 10 }}
+                />
+
+                {/* カテゴリ選択 */}
+                {!suppSearchText && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                    {suppCategories.map(cat => (
+                      <button key={cat.label} onClick={() => {
+                        const newCat = suppCategory === cat.label ? '' : cat.label
+                        setSuppCategory(newCat)
+                        if (newCat) searchSupplements('', newCat)
+                        else setSuppSearchResults([])
+                      }}
+                        style={{ padding: '6px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer',
+                          background: suppCategory === cat.label ? '#1a1a2e' : '#f0f0f0',
+                          color: suppCategory === cat.label ? '#e8c97e' : '#555' }}>
+                        {cat.icon} {cat.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* 製品リスト */}
+                {searchingSupp ? (
+                  <div style={{ textAlign: 'center', color: '#aaa', fontSize: 12, padding: '12px 0' }}>検索中...</div>
+                ) : suppSearchResults.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {suppSearchResults.map(p => (
+                      <button key={p.id} onClick={() => { setSuppProduct(p); setSuppServings(safeJSON(p.servings_options, [1])[0] || 1) }}
+                        style={{ background: suppProduct?.id === p.id ? '#1a1a2e' : '#f8f8f8',
+                          border: suppProduct?.id === p.id ? '2px solid #1a1a2e' : '1px solid #eee',
+                          borderRadius: 10, padding: '10px 12px', cursor: 'pointer', textAlign: 'left' }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: suppProduct?.id === p.id ? '#e8c97e' : '#1a1a2e' }}>
+                          {p.brand}　{p.name}
+                        </div>
+                        <div style={{ fontSize: 11, color: suppProduct?.id === p.id ? 'rgba(232,201,126,0.8)' : '#888', marginTop: 2 }}>
+                          {p.serving_unit} / P{p.protein_per_serving}g・F{p.fat_per_serving}g・C{p.carbs_per_serving}g・{p.calories_per_serving}kcal
+                          {p.special_per_serving && ` / ${p.special_per_serving}`}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : (suppCategory || suppSearchText) ? (
+                  <div style={{ textAlign: 'center', color: '#aaa', fontSize: 12, padding: '12px 0' }}>
+                    製品が見つかりません
+                  </div>
+                ) : null}
               </div>
             )}
-
-            {/* 製品リスト（Supabase検索結果） */}
-            {searchingSupp ? (
-              <div style={{ textAlign: 'center', color: '#aaa', fontSize: 12, padding: '12px 0' }}>検索中...</div>
-            ) : suppSearchResults.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {suppSearchResults.map(p => (
-                  <button key={p.id} onClick={() => { setSuppProduct(p); setSuppServings(safeJSON(p.servings_options, [1])[0] || 1) }}
-                    style={{ background: suppProduct?.id === p.id ? '#1a1a2e' : '#f8f8f8',
-                      border: suppProduct?.id === p.id ? '2px solid #1a1a2e' : '1px solid #eee',
-                      borderRadius: 10, padding: '10px 12px', cursor: 'pointer', textAlign: 'left' }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: suppProduct?.id === p.id ? '#e8c97e' : '#1a1a2e' }}>
-                      {p.brand}　{p.name}
-                    </div>
-                    <div style={{ fontSize: 11, color: suppProduct?.id === p.id ? 'rgba(232,201,126,0.8)' : '#888', marginTop: 2 }}>
-                      {p.serving_unit} / P{p.protein_per_serving}g・F{p.fat_per_serving}g・C{p.carbs_per_serving}g・{p.calories_per_serving}kcal
-                      {p.special_per_serving && ` / ${p.special_per_serving}`}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            ) : (suppCategory || suppSearchText) ? (
-              <div style={{ textAlign: 'center', color: '#aaa', fontSize: 12, padding: '12px 0' }}>
-                製品が見つかりません
-              </div>
-            ) : null}
           </div>
 
           {/* ② 量・タイミング選択（製品選択後に表示） */}
