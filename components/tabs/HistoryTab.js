@@ -2,28 +2,187 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { DailySummaryCard } from '../MainApp'
 
-const MEAL_ICONS = { breakfast:'🌅', lunch:'☀️', dinner:'🌙' }
+const MEAL_ICONS  = { breakfast:'🌅', lunch:'☀️', dinner:'🌙' }
 const MEAL_LABELS = { breakfast:'朝食', lunch:'昼食', dinner:'夕食' }
 
+// ─── レシピモーダル（PhotoTabと同じ）───
+function RecipeModal({ dish, onClose }) {
+  if (!dish) return null
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:2000, display:'flex', alignItems:'flex-end' }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{ background:'#fff', borderRadius:'20px 20px 0 0', width:'100%', maxHeight:'85vh', overflowY:'auto', padding:'20px 16px' }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:14 }}>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:16, fontWeight:700, color:'#1a1a2e' }}>🍴 {dish.dish_name}</div>
+            {dish.calories_approx && <div style={{ fontSize:12, color:'#888', marginTop:3 }}>{dish.calories_approx}</div>}
+          </div>
+          <button onClick={onClose} style={{ background:'#f0f0f0', border:'none', borderRadius:'50%', width:28, height:28, cursor:'pointer', fontSize:14 }}>✕</button>
+        </div>
+        {dish.goal_fit && (
+          <div style={{ background:'#EAF3DE', border:'1px solid #C0DD97', borderRadius:10, padding:'8px 12px', marginBottom:14 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:'#3B6D11', marginBottom:2 }}>✅ 目標との相性</div>
+            <div style={{ fontSize:12, color:'#3B6D11', lineHeight:1.6 }}>{dish.goal_fit}</div>
+          </div>
+        )}
+        {dish.tip && (
+          <div style={{ background:'#f8f8f8', borderLeft:'3px solid #e8c97e', borderRadius:'0 8px 8px 0', padding:'8px 12px', marginBottom:14 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:'#B45309', marginBottom:2 }}>💡 ポイント</div>
+            <div style={{ fontSize:12, color:'#555', lineHeight:1.6 }}>{dish.tip}</div>
+          </div>
+        )}
+        {dish.recipe_steps && dish.recipe_steps.length > 0 && (
+          <div>
+            <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:10 }}>📋 作り方</div>
+            {dish.recipe_steps.map((step, i) => (
+              <div key={i} style={{ display:'flex', gap:10, marginBottom:10, alignItems:'flex-start' }}>
+                <div style={{ width:24, height:24, borderRadius:'50%', background:'#1a1a2e', color:'#e8c97e', fontSize:12, fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>{i+1}</div>
+                <div style={{ fontSize:13, color:'#333', lineHeight:1.7, flex:1 }}>{step}</div>
+              </div>
+            ))}
+          </div>
+        )}
+        <button onClick={onClose} style={{ width:'100%', background:'#1a1a2e', color:'#e8c97e', border:'none', borderRadius:12, padding:12, fontSize:14, fontWeight:600, cursor:'pointer', marginTop:10 }}>閉じる</button>
+      </div>
+    </div>
+  )
+}
+
+// ─── 食事詳細パネル（タップして展開）───
+function MealDetail({ record, onClose }) {
+  const [openIdx, setOpenIdx]     = useState(0)
+  const [recipeModal, setRecipeModal] = useState(null)
+
+  const suggestions = record.food_suggestions || []
+
+  return (
+    <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:12, padding:14, marginBottom:8 }}>
+
+      {/* ヘッダー */}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+        <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>
+          {MEAL_ICONS[record.meal_type] || '🍽️'} {record.meal_name}
+        </div>
+        <button onClick={onClose} style={{ background:'#e2e8f0', border:'none', borderRadius:20, padding:'2px 10px', fontSize:12, color:'#64748b', cursor:'pointer' }}>
+          閉じる ▲
+        </button>
+      </div>
+
+      {/* PFC */}
+      <div style={{ display:'flex', gap:8, marginBottom:12 }}>
+        {[
+          { label:'カロリー', val:`${record.total_cal}kcal`, color:'#f59e0b' },
+          { label:'タンパク質', val:`${Math.round(record.protein||0)}g`, color:'#185FA5' },
+          { label:'脂質', val:`${Math.round(record.fat||0)}g`, color:'#BA7517' },
+          { label:'炭水化物', val:`${Math.round(record.carbs||0)}g`, color:'#3B6D11' },
+        ].map(item => (
+          <div key={item.label} style={{ flex:1, background:'#fff', borderRadius:8, padding:'6px 4px', textAlign:'center', border:'1px solid #e2e8f0' }}>
+            <div style={{ fontSize:13, fontWeight:700, color:item.color }}>{item.val}</div>
+            <div style={{ fontSize:9, color:'#888', marginTop:1 }}>{item.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* AIアドバイス */}
+      {record.advice && (
+        <div style={{ background:'#fff', borderLeft:'3px solid #1a1a2e', borderRadius:'0 8px 8px 0', padding:'10px 12px', fontSize:12, lineHeight:1.7, color:'#374151', marginBottom:12 }}>
+          {record.advice}
+        </div>
+      )}
+
+      {/* 不足栄養素と料理提案 */}
+      {suggestions.length > 0 ? (
+        <div>
+          <div style={{ fontSize:12, fontWeight:700, color:'#1a1a2e', marginBottom:8, display:'flex', alignItems:'center', gap:5 }}>
+            <span>🍽️</span> 次の食事で補いたい栄養素と料理
+          </div>
+          {suggestions.map((s, si) => (
+            <div key={si} style={{ border:'1px solid #e8e8e8', borderRadius:10, marginBottom:6, overflow:'hidden' }}>
+              <button
+                onClick={() => setOpenIdx(openIdx === si ? -1 : si)}
+                style={{ width:'100%', background: openIdx===si?'#1a1a2e':'#f8f8f8', border:'none', padding:'9px 12px', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'space-between', textAlign:'left' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                  <span style={{ fontSize:20 }}>{s.nutrient_icon}</span>
+                  <div>
+                    <div style={{ fontSize:12, fontWeight:700, color: openIdx===si?'#e8c97e':'#1a1a2e' }}>{s.nutrient_name}が不足</div>
+                    <div style={{ fontSize:10, color: openIdx===si?'rgba(232,201,126,0.8)':'#888', marginTop:1 }}>{s.reason}</div>
+                  </div>
+                </div>
+                <span style={{ fontSize:11, color: openIdx===si?'#e8c97e':'#aaa', flexShrink:0 }}>{openIdx===si?'▲':'▼'}</span>
+              </button>
+
+              {openIdx === si && (
+                <div style={{ padding:'8px 10px', background:'#fff', display:'flex', flexDirection:'column', gap:8 }}>
+                  {(s.foods || []).map((food, fi) => (
+                    <div key={fi} style={{ background:'#f8f8f8', borderRadius:8, padding:'8px 10px' }}>
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
+                        <span style={{ fontSize:12, fontWeight:700, color:'#1a1a2e' }}>🥘 {food.food_name}</span>
+                        <span style={{ fontSize:10, color:'#888', background:'#e8e8e8', padding:'1px 6px', borderRadius:20 }}>{food.amount}</span>
+                      </div>
+                      <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+                        {(food.dishes || []).map((dish, di) => (
+                          <div key={di} style={{ background:'#fff', borderRadius:7, padding:'7px 9px', borderLeft:'3px solid #e8c97e' }}>
+                            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:2 }}>
+                              <div style={{ fontSize:12, fontWeight:600, color:'#1a1a2e' }}>🍴 {dish.dish_name}</div>
+                              {dish.recipe_steps && dish.recipe_steps.length > 0 && (
+                                <button onClick={() => setRecipeModal(dish)}
+                                  style={{ background:'#1a1a2e', color:'#e8c97e', border:'none', borderRadius:20, padding:'2px 8px', fontSize:10, fontWeight:600, cursor:'pointer', flexShrink:0, marginLeft:6 }}>
+                                  レシピ
+                                </button>
+                              )}
+                            </div>
+                            {dish.tip && <div style={{ fontSize:10, color:'#666', lineHeight:1.5 }}>💡 {dish.tip}</div>}
+                            {dish.calories_approx && <div style={{ fontSize:10, color:'#aaa', marginTop:2 }}>📊 {dish.calories_approx}</div>}
+                            {dish.goal_fit && <div style={{ fontSize:10, color:'#3B6D11', marginTop:2 }}>✅ {dish.goal_fit}</div>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ fontSize:12, color:'#aaa', textAlign:'center', padding:'8px 0' }}>
+          栄養素の提案データがありません
+        </div>
+      )}
+
+      {/* レシピモーダル */}
+      {recipeModal && <RecipeModal dish={recipeModal} onClose={() => setRecipeModal(null)} />}
+    </div>
+  )
+}
+
+// ─── メインコンポーネント ───
 export default function HistoryTab({ profile, dailyIntake = [], onDelete }) {
-  const [records, setRecords] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [records, setRecords]       = useState([])
+  const [loading, setLoading]       = useState(true)
+  const [selectedDate, setSelectedDate] = useState(() => {
+    // JST基準の今日
+    const jstMs = Date.now() + 9 * 60 * 60 * 1000
+    return new Date(jstMs).toISOString().slice(0, 10)
+  })
   const [deletingId, setDeletingId] = useState(null)
-  const [confirmId, setConfirmId] = useState(null)
-  const isToday = selectedDate === new Date().toISOString().slice(0, 10)
+  const [confirmId, setConfirmId]   = useState(null)
+  const [openDetailId, setOpenDetailId] = useState(null)  // タップで開く詳細
+
+  const todayJst = (() => {
+    const jstMs = Date.now() + 9 * 60 * 60 * 1000
+    return new Date(jstMs).toISOString().slice(0, 10)
+  })()
+  const isToday = selectedDate === todayJst
 
   useEffect(() => { fetchRecords() }, [selectedDate])
-
-  // 食事が追加・削除されたとき今日の表示を自動更新
-  useEffect(() => {
-    if (isToday) fetchRecords()
-  }, [dailyIntake.length])
+  useEffect(() => { if (isToday) fetchRecords() }, [dailyIntake.length])
 
   async function fetchRecords() {
     setLoading(true)
-    const from = selectedDate + 'T00:00:00.000Z'
-    const to   = selectedDate + 'T23:59:59.999Z'
+    // JST日付範囲でクエリ（+09:00ベース）
+    const from = selectedDate + 'T00:00:00+09:00'
+    const to   = selectedDate + 'T23:59:59+09:00'
     const { data } = await supabase
       .from('meal_records')
       .select('*')
@@ -41,12 +200,11 @@ export default function HistoryTab({ profile, dailyIntake = [], onDelete }) {
     setRecords(prev => prev.filter(r => r.id !== id))
     setConfirmId(null)
     setDeletingId(null)
-    // 今日の記録ならdailyIntakeからも除去
+    setOpenDetailId(null)
     if (onDelete) onDelete(id)
   }
 
-  const displayRecords = records
-  const intakeForSummary = displayRecords.map(r => ({
+  const intakeForSummary = records.map(r => ({
     total_cal: r.total_cal, protein: r.protein, fat: r.fat,
     carbs: r.carbs, vitamins: r.vitamins, minerals: r.minerals,
   }))
@@ -55,7 +213,7 @@ export default function HistoryTab({ profile, dailyIntake = [], onDelete }) {
     <>
       {/* 日付選択 */}
       <div style={{ background:'#fff', borderRadius:16, padding:'1rem', marginBottom:12 }}>
-        <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} style={{ width:'100%' }} />
+        <input type="date" value={selectedDate} onChange={e => { setSelectedDate(e.target.value); setOpenDetailId(null) }} style={{ width:'100%' }} />
       </div>
 
       {/* 栄養バランスサマリー */}
@@ -64,19 +222,37 @@ export default function HistoryTab({ profile, dailyIntake = [], onDelete }) {
       {/* 食事リスト */}
       <div style={{ background:'#fff', borderRadius:16, padding:'1rem', marginBottom:12 }}>
         <div style={{ fontSize:14, fontWeight:600, marginBottom:10 }}>食事記録</div>
+        <div style={{ fontSize:11, color:'#aaa', marginBottom:10 }}>
+          💡 食事をタップするとアドバイス・不足栄養素・レシピが確認できます
+        </div>
+
         {loading
           ? <p style={{ textAlign:'center', color:'#aaa', padding:'1.5rem 0', fontSize:14 }}>読み込み中...</p>
-          : displayRecords.length === 0
+          : records.length === 0
             ? <p style={{ textAlign:'center', color:'#aaa', padding:'1.5rem 0', fontSize:14 }}>この日の記録はありません</p>
-            : displayRecords.map((r, i) => (
+            : records.map((r, i) => (
                 <div key={r.id || i}>
-                  <div style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 0', borderBottom: confirmId === r.id ? 'none' : '1px solid #f5f5f5' }}>
-                    {/* 食事アイコン */}
+
+                  {/* 食事行（タップで詳細開閉） */}
+                  <div
+                    onClick={() => {
+                      if (confirmId === r.id) return  // 削除確認中はタップ無効
+                      setOpenDetailId(openDetailId === r.id ? null : r.id)
+                    }}
+                    style={{
+                      display:'flex', alignItems:'center', gap:12,
+                      padding:'10px 0',
+                      borderBottom: (openDetailId === r.id || confirmId === r.id) ? 'none' : '1px solid #f5f5f5',
+                      cursor:'pointer',
+                      background: openDetailId === r.id ? '#f8fafc' : 'transparent',
+                      borderRadius: openDetailId === r.id ? '8px 8px 0 0' : 0,
+                      transition:'background 0.15s',
+                    }}
+                  >
                     <div style={{ fontSize:24, flexShrink:0 }}>
                       {MEAL_ICONS[r.meal_type] || '🍽️'}
                     </div>
 
-                    {/* 食事情報 */}
                     <div style={{ flex:1 }}>
                       <div style={{ display:'flex', alignItems:'center', gap:6 }}>
                         <span style={{ fontSize:14, fontWeight:600 }}>{r.meal_name}</span>
@@ -85,25 +261,37 @@ export default function HistoryTab({ profile, dailyIntake = [], onDelete }) {
                             {MEAL_LABELS[r.meal_type] || r.meal_type}
                           </span>
                         )}
+                        {/* 詳細あり表示 */}
+                        {(r.food_suggestions?.length > 0 || r.advice) && (
+                          <span style={{ fontSize:10, padding:'1px 6px', borderRadius:10, background:'#EAF3DE', color:'#3B6D11' }}>
+                            詳細あり
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize:12, color:'#888', marginTop:2 }}>
-                        {r.recorded_at ? new Date(r.recorded_at).toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' }) : ''}
-                        &ensp;P {Math.round(r.protein || 0)}g · F {Math.round(r.fat || 0)}g · C {Math.round(r.carbs || 0)}g
+                        {r.recorded_at
+                          ? new Date(r.recorded_at).toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit', timeZone:'Asia/Tokyo' })
+                          : ''}
+                        &ensp;P {Math.round(r.protein||0)}g · F {Math.round(r.fat||0)}g · C {Math.round(r.carbs||0)}g
                       </div>
                       {r.symptoms && (
                         <div style={{ fontSize:11, color:'#BA7517', marginTop:2 }}>📋 {r.symptoms}</div>
                       )}
                     </div>
 
-                    {/* カロリー＋削除ボタン */}
                     <div style={{ display:'flex', alignItems:'center', gap:8, flexShrink:0 }}>
                       <div style={{ textAlign:'right' }}>
                         <div style={{ fontSize:18, fontWeight:700 }}>{r.total_cal}</div>
                         <div style={{ fontSize:11, color:'#888' }}>kcal</div>
                       </div>
+                      {/* 展開インジケーター */}
+                      <span style={{ fontSize:12, color:'#aaa' }}>
+                        {openDetailId === r.id ? '▲' : '▼'}
+                      </span>
+                      {/* 削除ボタン */}
                       {r.id && (
                         <button
-                          onClick={() => setConfirmId(confirmId === r.id ? null : r.id)}
+                          onClick={e => { e.stopPropagation(); setConfirmId(confirmId === r.id ? null : r.id) }}
                           style={{ background:'none', border:'1px solid #ddd', borderRadius:8, padding:'4px 8px', fontSize:16, cursor:'pointer', color:'#aaa' }}
                         >
                           🗑️
@@ -111,6 +299,14 @@ export default function HistoryTab({ profile, dailyIntake = [], onDelete }) {
                       )}
                     </div>
                   </div>
+
+                  {/* 詳細パネル（展開時） */}
+                  {openDetailId === r.id && confirmId !== r.id && (
+                    <MealDetail
+                      record={r}
+                      onClose={() => setOpenDetailId(null)}
+                    />
+                  )}
 
                   {/* 削除確認 */}
                   {confirmId === r.id && (

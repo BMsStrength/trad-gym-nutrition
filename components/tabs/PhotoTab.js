@@ -291,10 +291,11 @@ export default function PhotoTab({ profile, onRecord }) {
             carbs:       data.carbs      || 0,
             vitamins:    data.vitamins   || {},
             minerals:    data.minerals   || {},
-            advice:      data.advice     || '',
-            note:        meal.note       || '',
-            symptoms:    meal.symptoms   || '',
-            recorded_at: buildRecordedAt(meal.eaten_at),
+            advice:           data.advice           || '',
+            food_suggestions: data.food_suggestions  || [],
+            note:             meal.note              || '',
+            symptoms:         meal.symptoms          || '',
+            recorded_at:      buildRecordedAt(meal.eaten_at),
           })
           .select()
           .single()
