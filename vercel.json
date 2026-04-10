@@ -1,0 +1,13 @@
+{
+  "functions": {
+    "pages/api/analyze.js": {
+      "maxDuration": 60
+    },
+    "pages/api/chat.js": {
+      "maxDuration": 60
+    },
+    "pages/api/blood-test.js": {
+      "maxDuration": 60
+    }
+  }
+}

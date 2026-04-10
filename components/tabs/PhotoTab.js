@@ -204,6 +204,7 @@ export default function PhotoTab({ profile, onRecord }) {
     if (meal.images.length === 0 && !meal.note) return
     setAnalyzing(mealId)
     try {
+      // Step1: AI分析API呼び出し
       const res = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -216,34 +217,61 @@ export default function PhotoTab({ profile, onRecord }) {
           profile,
         }),
       })
-      const data = await res.json()
-      if (data.error) throw new Error(data.error)
-      // 食事時刻を組み立て（今日の日付 + 入力時刻）
-      const todayDate = new Date().toISOString().slice(0, 10)
-      const eatenAt = meal.eaten_at
-        ? new Date(todayDate + 'T' + meal.eaten_at + ':00').toISOString()
-        : new Date().toISOString()
 
-      const { data: inserted } = await supabase.from('meal_records').insert({
-        user_id: profile.id,
-        meal_name: data.meal_name,
-        meal_type: mealId,
-        total_cal: data.total_cal,
-        protein: data.protein,
-        fat: data.fat,
-        carbs: data.carbs,
-        vitamins: data.vitamins,
-        minerals: data.minerals,
-        advice: data.advice,
-        note: meal.note,
-        symptoms: meal.symptoms,
-        recorded_at: eatenAt,
-      }).select().single()
-      // idつきでdailyIntakeに追加（履歴タブで削除できるようにするため）
-      onRecord(inserted || data)
+      // Step2: レスポンスをまずテキストで受け取る（JSON parseエラーを防ぐ）
+      const text = await res.text()
+      let data
+      try {
+        data = JSON.parse(text)
+      } catch(parseErr) {
+        console.error('JSON parse error. Response was:', text.slice(0, 300))
+        throw new Error('AI応答の解析に失敗しました')
+      }
+
+      if (!res.ok || data.error) {
+        console.error('API error:', data.error || res.status)
+        throw new Error(data.error || `APIエラー: ${res.status}`)
+      }
+
+      // Step3: 分析結果を先に表示（保存より先）
       setResults(prev => ({ ...prev, [mealId]: data }))
+
+      // Step4: Supabaseに保存（失敗しても分析結果表示は維持）
+      try {
+        const todayDate = new Date().toISOString().slice(0, 10)
+        const eatenAt = meal.eaten_at
+          ? new Date(todayDate + 'T' + meal.eaten_at + ':00').toISOString()
+          : new Date().toISOString()
+
+        const { data: inserted, error: dbError } = await supabase.from('meal_records').insert({
+          user_id: profile.id,
+          meal_name: data.meal_name || '食事記録',
+          meal_type: mealId,
+          total_cal: data.total_cal || 0,
+          protein: data.protein || 0,
+          fat: data.fat || 0,
+          carbs: data.carbs || 0,
+          vitamins: data.vitamins || {},
+          minerals: data.minerals || {},
+          advice: data.advice || '',
+          note: meal.note || '',
+          symptoms: meal.symptoms || '',
+          recorded_at: eatenAt,
+        }).select().single()
+
+        if (dbError) {
+          console.error('DB save error:', dbError.message)
+        } else {
+          onRecord(inserted || data)
+        }
+      } catch(dbErr) {
+        console.error('DB save failed:', dbErr.message)
+        // DB保存失敗は無視して分析結果は表示する
+      }
+
     } catch(e) {
-      alert('分析に失敗しました。もう一度お試しください。')
+      console.error('analyzeMeal error:', e.message)
+      alert('AI分析に失敗しました：' + e.message)
     }
     setAnalyzing(null)
   }
