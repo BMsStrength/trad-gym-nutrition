@@ -19,12 +19,17 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
   const { images, note, symptoms, mealType, mealTime, profile } = req.body
-  const bmi = Math.round(profile.weight / ((profile.height / 100) ** 2) * 10) / 10
 
-  const goals = profile.goals || [profile.goal]
-  const goalLabels = goals.map(g => GOAL_LABELS[g] || g).join('・')
-  const profileSymptoms = profile.symptoms?.length > 0
-    ? profile.symptoms.join('・') + (profile.symptoms_other ? '・' + profile.symptoms_other : '')
+  // profileのデフォルト値を設定（nullセーフ）
+  const safeProfile = profile || {}
+  const weight = safeProfile.weight || 60
+  const height = safeProfile.height || 165
+  const bmi = Math.round(weight / ((height / 100) ** 2) * 10) / 10
+
+  const goals = safeProfile.goals || [safeProfile.goal] || ['maintain']
+  const goalLabels = goals.filter(Boolean).map(g => GOAL_LABELS[g] || g).join('・') || '健康維持'
+  const profileSymptoms = safeProfile.symptoms?.length > 0
+    ? safeProfile.symptoms.join('・') + (safeProfile.symptoms_other ? '・' + safeProfile.symptoms_other : '')
     : null
 
   // 食事時刻の解析（時間栄養学）
@@ -38,7 +43,7 @@ export default async function handler(req, res) {
     : ''
 
   // 65歳以上の老年栄養学モード
-  const userAge = profile.age || 30
+  const userAge = safeProfile.age || 30
   const isSenior = userAge >= 65
   const seniorNote = isSenior
     ? `【老年栄養学モード：${userAge}歳】サルコペニア予防のためタンパク質は1.2〜1.5g/kg/日が必要（若者より高め）。フレイル予防・骨粗鬆症（Ca+VitD3+K2）・脱水（口渇感が低下しているため積極的水分補給を推奨）・小分け頻回食を優先したアドバイスを必ず含めること。`
@@ -290,12 +295,12 @@ ${MOLECULAR_NUTRITION_DB}
 - **複数枚の写真**：角度が異なる複数枚がある場合は三角測量的に精度を上げる
 
 ## ユーザー情報
-- ${profile.nickname}（${profile.gender==='male'?'男性':'女性'}、${profile.age}歳）
-- 身長${profile.height}cm、体重${profile.weight}kg、BMI${bmi}
-- 体脂肪率：${profile.bodyfat ? profile.bodyfat + '%' : '不明'}
+- ${safeProfile.nickname || "会員"}（${safeProfile.gender==='male'?'男性':'女性'}、${safeProfile.age || 30}歳）
+- 身長${safeProfile.height || 165}cm、体重${weight}kg、BMI${bmi}
+- 体脂肪率：${safeProfile.bodyfat ? safeProfile.bodyfat + '%' : '不明'}
 - 目標：${goalLabels}
-- 1日の目標カロリー：${profile.targetCal} kcal
-- 推奨PFC：P${profile.pfcP}g / F${profile.pfcF}g / C${profile.pfcC}g
+- 1日の目標カロリー：${safeProfile.targetCal || 2000} kcal
+- 推奨PFC：P${safeProfile.pfcP || 120}g / F${safeProfile.pfcF || 60}g / C${safeProfile.pfcC || 250}g
 ${profileSymptoms ? `- 登録済み症状：${profileSymptoms}` : ''}
 ${mealType ? `- 食事区分：${mealType}` : ''}
 ${symptoms ? `- 今日の体調・症状：${symptoms}` : ''}
@@ -614,7 +619,15 @@ ${profileSymptoms || symptoms ? `
 
     imageList.forEach(base64 => {
       if (base64) {
-        content.push({ type:'image', source:{ type:'base64', media_type:'image/jpeg', data: base64 } })
+        // base64のヘッダーからメディアタイプを自動判定
+        let mediaType = 'image/jpeg'
+        if (base64.startsWith('/9j/') || base64.startsWith('data:image/jpeg')) mediaType = 'image/jpeg'
+        else if (base64.startsWith('iVBORw0K') || base64.startsWith('data:image/png')) mediaType = 'image/png'
+        else if (base64.startsWith('R0lGOD') || base64.startsWith('data:image/gif')) mediaType = 'image/gif'
+        else if (base64.startsWith('UklGR') || base64.startsWith('data:image/webp')) mediaType = 'image/webp'
+        // data:image/xxx;base64, プレフィックスがある場合は除去
+        const cleanBase64 = base64.includes(',') ? base64.split(',')[1] : base64
+        content.push({ type:'image', source:{ type:'base64', media_type: mediaType, data: cleanBase64 } })
       }
     })
 
