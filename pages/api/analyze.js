@@ -1,5 +1,11 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { MOLECULAR_NUTRITION_DB, MOLECULAR_NUTRITION_SUMMARY } from '../../lib/molecularNutritionDB'
+import {
+  BASIC_NUTRITION_DB, FOOD_SCIENCE_DB, COOKING_SCIENCE_DB,
+  CLINICAL_NUTRITION_DB, GERIATRIC_NUTRITION_DB, SPORTS_NUTRITION_DB,
+  CHRONO_NUTRITION_DB, BEHAVIORAL_NUTRITION_DB,
+  APPLIED_NUTRITION_DB, SUPPLEMENT_EVIDENCE_DB
+} from '../../lib/nutritionKnowledgeDB'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -50,9 +56,16 @@ ${seniorNote}
 - 【分子栄養学・代謝・ホルモン】以下の統合データベースを必ず参照してアドバイスに反映すること：
 ${MOLECULAR_NUTRITION_DB}
 【コアプリンシプル】${MOLECULAR_NUTRITION_SUMMARY}
-- 【スポーツ栄養学】筋肉増量目標には運動後30分以内のタンパク補給（20〜40g）を提案。ロイシン3g/食がmTOR活性化の閾値
-- 【行動栄養学】改善提案は「今日の夕食に〇〇を追加」レベルの実行しやすい小さな一歩で
-- 【サプリメント評価】食事だけで補えない栄養素にはサプリ補助も提案（バイオアベイラビリティを考慮した形態まで言及）
+- 【基礎栄養学・栄養生化学】${BASIC_NUTRITION_DB}
+- 【食品学・食品科学】${FOOD_SCIENCE_DB}
+- 【調理学】${COOKING_SCIENCE_DB}
+- 【臨床栄養学・病態栄養学】${CLINICAL_NUTRITION_DB}
+- 【老年栄養学】${GERIATRIC_NUTRITION_DB}
+- 【スポーツ栄養学】${SPORTS_NUTRITION_DB}
+- 【時間栄養学】${CHRONO_NUTRITION_DB}
+- 【行動栄養学】${BEHAVIORAL_NUTRITION_DB}
+- 【応用栄養学・精神栄養学】${APPLIED_NUTRITION_DB}
+- 【サプリメント評価】${SUPPLEMENT_EVIDENCE_DB}
 
 ## 参照する栄養データベース（優先順位順）
 
