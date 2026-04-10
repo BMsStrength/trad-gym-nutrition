@@ -100,7 +100,7 @@ ${isElderly ? `
     content.push({ type: 'text', text: '健康診断の血液検査結果を分析してください。画像から数値を読み取り、栄養状態・内臓機能・炎症反応を評価してアドバイスをJSON形式で返してください。' })
 
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-5-20251001',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 3000,
       system: systemPrompt,
       messages: [{ role: 'user', content }],

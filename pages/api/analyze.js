@@ -131,7 +131,7 @@ ${sym.includes('下痢') || sym.includes('腹痛') ? '- 胃腸症状：豆腐・
     content.push({ type: 'text', text: parts.join('\n') })
 
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-5-20251001',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 3000,
       system: systemPrompt,
       messages: [{ role: 'user', content }],
