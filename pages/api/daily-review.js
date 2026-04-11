@@ -8,6 +8,23 @@ const GOAL_LABELS = {
   energy: '疲労・エネルギー改善', condition: '体調不良改善',
 }
 
+// analyze.jsと同じ安全なJSONパース
+function safeParseJSON(raw) {
+  if (!raw) return null
+  const cleaned = raw
+    .replace(/```json\s*/gi, '')
+    .replace(/```\s*/g, '')
+    .trim()
+  const start = cleaned.indexOf('{')
+  const end   = cleaned.lastIndexOf('}')
+  if (start === -1 || end === -1 || start > end) return null
+  try {
+    return JSON.parse(cleaned.slice(start, end + 1))
+  } catch (e) {
+    return null
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
@@ -16,15 +33,15 @@ export default async function handler(req, res) {
     const p = profile || {}
     const goals = (p.goals || [p.goal]).filter(Boolean)
     const goalLabels = goals.map(g => GOAL_LABELS[g] || g).join('・') || '健康維持'
-    const sym = (p.symptoms || []).join('・') || ''
+    const sym      = (p.symptoms || []).join('・') || ''
     const isDiet   = goals.includes('diet')
     const isMuscle = goals.includes('muscle')
 
     // 1日の合計を計算
     const totalCal  = records.reduce((s, r) => s + (r.total_cal || 0), 0)
-    const totalP    = records.reduce((s, r) => s + (r.protein  || 0), 0)
-    const totalF    = records.reduce((s, r) => s + (r.fat      || 0), 0)
-    const totalC    = records.reduce((s, r) => s + (r.carbs    || 0), 0)
+    const totalP    = records.reduce((s, r) => s + (r.protein   || 0), 0)
+    const totalF    = records.reduce((s, r) => s + (r.fat       || 0), 0)
+    const totalC    = records.reduce((s, r) => s + (r.carbs     || 0), 0)
     const mealNames = records.map(r => r.meal_name).join('、')
 
     // ビタミン・ミネラルの合計
@@ -34,12 +51,12 @@ export default async function handler(req, res) {
       if (r.minerals) Object.entries(r.minerals).forEach(([k, v]) => { minTotals[k] = (minTotals[k] || 0) + (v.amount || 0) })
     })
 
-    // 不足しているビタミン・ミネラルを特定
+    // 不足栄養素を特定
     const VIT_TARGETS = { 'A':800,'B1':1.2,'B2':1.4,'B6':1.3,'B12':2.4,'C':100,'D':10,'E':12,'K':100,'葉酸':240 }
     const MIN_TARGETS = { 'カルシウム':800,'鉄':10,'マグネシウム':340,'亜鉛':10,'カリウム':2500 }
-    const lowVit = Object.entries(VIT_TARGETS).filter(([k,t]) => (vitTotals[k]||0) < t * 0.6).map(([k]) => `ビタミン${k}`)
-    const lowMin = Object.entries(MIN_TARGETS).filter(([k,t]) => (minTotals[k]||0) < t * 0.6).map(([k]) => k)
-    const deficiencies = [...lowVit, ...lowMin].slice(0, 5).join('・') || 'なし'
+    const lowVit = Object.entries(VIT_TARGETS).filter(([k,t]) => (vitTotals[k]||0) < t*0.6).map(([k]) => `ビタミン${k}`)
+    const lowMin = Object.entries(MIN_TARGETS).filter(([k,t]) => (minTotals[k]||0) < t*0.6).map(([k]) => k)
+    const deficiencies = [...lowVit, ...lowMin].slice(0, 4).join('・') || 'なし'
 
     const systemPrompt = `あなたは日本の管理栄養士AIです。1日の食事記録を分析し、総評と明日の食事提案をJSONのみで返してください。
 
@@ -50,58 +67,65 @@ ${sym ? `- 登録症状：${sym}` : ''}
 
 【本日の食事データ】
 - 食事内容：${mealNames}
-- 合計カロリー：${totalCal}kcal（目標比${Math.round(totalCal/(p.targetCal||2000)*100)}%）
-- PFC：P${Math.round(totalP)}g F${Math.round(totalF)}g C${Math.round(totalC)}g
-- 不足栄養素（60%未満）：${deficiencies}
+- 合計：${totalCal}kcal（目標比${Math.round(totalCal/(p.targetCal||2000)*100)}%）
+- PFC実績：P${Math.round(totalP)}g F${Math.round(totalF)}g C${Math.round(totalC)}g
+- 不足栄養素：${deficiencies}
 
-【料理提案ルール】
+【出力ルール】
+- 必ず { で始まり } で終わるJSONのみ。説明文・コードブロック不要
+- tomorrow_suggestionsは不足栄養素の上位2件
+- 各栄養素に食材1個、料理1品、recipe_steps3ステップ
 ${isDiet ? '- ダイエット：揚げ物禁止。蒸し・茹で・グリルのみ' : ''}
 ${isMuscle ? '- 筋肉増量：高タンパク（1食30g以上）を優先' : ''}
-${sym.includes('貧血') ? '- 貧血：ヘム鉄+ビタミンCセットを必ず提案' : ''}
 
-【出力形式】JSONのみ。{ で始まり } で終わること。
 {
-  "overall_score": 80,
-  "score_label": "良好",
-  "review": "本日の食事の総評200字程度。①良かった点 ②改善できる点 ③明日へのアドバイス",
+  "overall_score": 数値,
+  "score_label": "良好/普通/要改善",
+  "review": "総評200字。①良かった点 ②改善点 ③明日へのアドバイス",
   "tomorrow_suggestions": [
     {
-      "nutrient_name": "不足栄養素名",
+      "nutrient_name": "栄養素名",
       "nutrient_icon": "絵文字",
       "reason": "なぜ必要か30字以内",
-      "foods": [
-        {
-          "food_name": "食材名",
-          "amount": "目安量",
-          "dishes": [
-            {
-              "dish_name": "料理名",
-              "tip": "調理のコツ30字",
-              "calories_approx": "約XXXkcal",
-              "goal_fit": "目標との適合性",
-              "recipe_steps": ["手順1","手順2","手順3"]
-            }
-          ]
-        }
-      ]
+      "foods": [{"food_name":"食材名","amount":"目安量","dishes":[{"dish_name":"料理名","tip":"コツ30字","calories_approx":"約XXXkcal","goal_fit":"目標との適合性","recipe_steps":["手順1","手順2","手順3"]}]}]
     }
   ]
 }`
 
-    const response = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1500,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: `${targetDate}の食事記録を分析して総評と明日の食事提案をしてください。` }],
-    })
+    // 最大2回リトライ
+    let parsed = null
+    let lastError = ''
 
-    const raw = response.content.map(b => b.text || '').join('')
-    const cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
-    const start = cleaned.indexOf('{')
-    const end   = cleaned.lastIndexOf('}')
-    if (start === -1 || end === -1) throw new Error('JSONが取得できませんでした')
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const response = await client.messages.create({
+          model:      'claude-haiku-4-5-20251001',
+          max_tokens: 2000,
+          system:     systemPrompt,
+          messages:   [{ role: 'user', content: `${targetDate}の食事記録を分析して総評と明日の食事提案をしてください。` }],
+        })
 
-    const parsed = JSON.parse(cleaned.slice(start, end + 1))
+        const raw = response.content.map(b => b.text || '').join('')
+        parsed = safeParseJSON(raw)
+
+        if (parsed) {
+          if (!parsed.tomorrow_suggestions) parsed.tomorrow_suggestions = []
+          break
+        } else {
+          lastError = `AI応答のJSON解析に失敗（試行${attempt}）`
+          console.error(`Attempt ${attempt} parse failed. Raw:`, raw.slice(0, 200))
+        }
+      } catch (apiErr) {
+        lastError = apiErr.message
+        console.error(`Attempt ${attempt} API error:`, apiErr.message)
+        if (attempt < 2) await new Promise(r => setTimeout(r, 1000))
+      }
+    }
+
+    if (!parsed) {
+      return res.status(500).json({ error: lastError || '総評の生成に失敗しました。もう一度お試しください。' })
+    }
+
     res.json(parsed)
 
   } catch (e) {
