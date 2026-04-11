@@ -330,7 +330,9 @@ export default function HistoryTab({ profile, dailyIntake = [], onDelete }) {
   const isToday = selectedDate === todayJst
 
   useEffect(() => { fetchRecords() }, [selectedDate])
-  useEffect(() => { if (isToday) fetchRecords() }, [dailyIntake.length])
+  // タブ切り替えでHistoryTabがマウントされたとき今日のデータを最新化
+  useEffect(() => { if (isToday) fetchRecords() }, [])   // マウント時
+  useEffect(() => { if (isToday) fetchRecords() }, [dailyIntake.length])  // 追加時
 
   async function fetchRecords() {
     setLoading(true)

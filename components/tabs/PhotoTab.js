@@ -363,29 +363,43 @@ export default function PhotoTab({ profile, onRecord }) {
     const data = JSON.parse(text)
     if (!res.ok || data.error) throw new Error(data.error || `APIエラー (${res.status})`)
 
-    // Supabase保存
+    // Supabase保存（food_suggestionsカラムありで試み、なければなしで再試行）
+    let inserted = null
     try {
-      const { data: inserted, error: dbError } = await supabase
+      const baseRecord = {
+        user_id:          profile.id,
+        meal_name:        data.meal_name        || '食事記録',
+        meal_type:        mealId,
+        total_cal:        data.total_cal        || 0,
+        protein:          data.protein          || 0,
+        fat:              data.fat              || 0,
+        carbs:            data.carbs            || 0,
+        vitamins:         data.vitamins         || {},
+        minerals:         data.minerals         || {},
+        advice:           data.advice           || '',
+        note:             meal.note             || '',
+        symptoms:         meal.symptoms         || '',
+        recorded_at:      buildRecordedAt(meal.eaten_at),
+      }
+      // food_suggestionsカラムありで試みる
+      const { data: ins1, error: err1 } = await supabase
         .from('meal_records')
-        .insert({
-          user_id:          profile.id,
-          meal_name:        data.meal_name        || '食事記録',
-          meal_type:        mealId,
-          total_cal:        data.total_cal        || 0,
-          protein:          data.protein          || 0,
-          fat:              data.fat              || 0,
-          carbs:            data.carbs            || 0,
-          vitamins:         data.vitamins         || {},
-          minerals:         data.minerals         || {},
-          advice:           data.advice           || '',
-          food_suggestions: data.food_suggestions || [],
-          note:             meal.note             || '',
-          symptoms:         meal.symptoms         || '',
-          recorded_at:      buildRecordedAt(meal.eaten_at),
-        })
+        .insert({ ...baseRecord, food_suggestions: data.food_suggestions || [] })
         .select().single()
-      if (!dbError) onRecord(inserted || data)
+      if (!err1) {
+        inserted = ins1
+      } else {
+        console.warn('food_suggestions付きinsert失敗、カラムなしで再試行:', err1.message)
+        // food_suggestionsなしで再試行（カラムが未作成の場合の互換性）
+        const { data: ins2, error: err2 } = await supabase
+          .from('meal_records')
+          .insert(baseRecord)
+          .select().single()
+        if (!err2) { inserted = ins2 }
+        else { console.error('DB save error:', err2.message) }
+      }
     } catch (dbErr) { console.error('DB save failed:', dbErr.message) }
+    onRecord(inserted || data)  // DB保存の成否にかかわらずonRecordを呼ぶ
 
     return data
   }
