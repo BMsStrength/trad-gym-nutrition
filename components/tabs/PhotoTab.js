@@ -5,6 +5,7 @@ const MEALS = [
   { id:'breakfast', label:'朝食', icon:'🌅', defaultTime:'08:00' },
   { id:'lunch',     label:'昼食', icon:'☀️', defaultTime:'12:00' },
   { id:'dinner',    label:'夕食', icon:'🌙', defaultTime:'19:00' },
+  { id:'snack',     label:'間食', icon:'🍪', defaultTime:'15:00' },
 ]
 
 const TIPS = [
@@ -301,6 +302,7 @@ export default function PhotoTab({ profile, onRecord }) {
     breakfast: { images:[], note:'', symptoms:'', eaten_at:'08:00' },
     lunch:     { images:[], note:'', symptoms:'', eaten_at:'12:00' },
     dinner:    { images:[], note:'', symptoms:'', eaten_at:'19:00' },
+    snack:     { images:[], note:'', symptoms:'', eaten_at:'15:00' },
   })
   const [mealData, setMealData]   = useState(initMealData)
   const [analyzing, setAnalyzing] = useState(null)   // null | mealId | 'all'
@@ -309,7 +311,7 @@ export default function PhotoTab({ profile, onRecord }) {
   const [showTips,  setShowTips]  = useState(false)
 
   const fileRefs = {
-    breakfast: useRef(), lunch: useRef(), dinner: useRef()
+    breakfast: useRef(), lunch: useRef(), dinner: useRef(), snack: useRef()
   }
 
   // ─── 画像追加（圧縮付き）───

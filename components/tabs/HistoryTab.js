@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { DailySummaryCard } from '../MainApp'
 
-const MEAL_ICONS  = { breakfast:'🌅', lunch:'☀️', dinner:'🌙' }
-const MEAL_LABELS = { breakfast:'朝食', lunch:'昼食', dinner:'夕食' }
+const MEAL_ICONS  = { breakfast:'🌅', lunch:'☀️', dinner:'🌙', snack:'🍪' }
+const MEAL_LABELS = { breakfast:'朝食', lunch:'昼食', dinner:'夕食', snack:'間食' }
 
 // ─── レシピモーダル ───
 function RecipeModal({ dish, onClose }) {
