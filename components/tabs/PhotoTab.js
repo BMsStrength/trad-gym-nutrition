@@ -404,6 +404,15 @@ export default function PhotoTab({ profile, onRecord }) {
     return data
   }
 
+  // 指定したmealのフォームをリセット（分析完了後に呼ぶ）
+  function resetMeal(mealId) {
+    const defaultTime = MEALS.find(m => m.id === mealId)?.defaultTime || '12:00'
+    setMealData(prev => ({
+      ...prev,
+      [mealId]: { images: [], note: '', symptoms: '', eaten_at: defaultTime }
+    }))
+  }
+
   // ─── 個別分析（1食のみ）───
   async function analyzeOne(mealId) {
     setErrorMsg(null)
@@ -414,7 +423,10 @@ export default function PhotoTab({ profile, onRecord }) {
     setAnalyzing(mealId)
     try {
       const data = await analyzeSingle(mealId)
-      if (data) setResults(prev => ({ ...prev, [mealId]: data }))
+      if (data) {
+        setResults(prev => ({ ...prev, [mealId]: data }))
+        resetMeal(mealId)  // 分析完了後にフォームをリセットして二重送信防止
+      }
     } catch (e) {
       console.error(e)
       setErrorMsg('AI分析に失敗しました：' + e.message)
@@ -437,7 +449,10 @@ export default function PhotoTab({ profile, onRecord }) {
     for (const meal of targets) {
       try {
         const data = await analyzeSingle(meal.id)
-        if (data) newResults[meal.id] = data
+        if (data) {
+          newResults[meal.id] = data
+          resetMeal(meal.id)  // 分析完了後にフォームをリセットして二重送信防止
+        }
       } catch (e) {
         console.error(`${meal.label}の分析失敗:`, e.message)
         setErrorMsg(`${meal.label}の分析に失敗しました：${e.message}`)
